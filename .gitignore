@@ -21,3 +21,4 @@ backend/exercise_logs.json
 backend/test.jpg
 backend/runs_fruit_detect/
 *.cache
+!backend/models/fruit_detector.pt
