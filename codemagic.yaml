@@ -10,6 +10,8 @@ workflows:
       # Dung bundle id cua ban (doi com.example.mobile neu can).
       vars:
         BUNDLE_ID: "com.example.mobile"
+        # Dia chi backend cong khai (https://...). Doi sau khi ban co server/tunnel.
+        API_BASE_URL: "https://doi-dia-chi-backend-cua-ban"
       # Chon 1 trong 2 cach ky (xem huong dan trong Codemagic):
       #  - Co Apple Developer: bat ios_signing + app_store_connect ben duoi.
       #  - Chua co: chi build kiem tra (--no-codesign), chua cai len iPhone that duoc.
@@ -47,7 +49,7 @@ workflows:
       - name: Build iOS (khong ky)
         script: |
           cd mobile
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --dart-define=API_BASE_URL=$API_BASE_URL
       - name: Dong goi file .ipa chua ky (de Sideloadly/AltStore tu ky)
         script: |
           cd mobile/build/ios/iphoneos
