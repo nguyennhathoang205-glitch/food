@@ -44,11 +44,19 @@ workflows:
           cd mobile
           flutter analyze
           flutter test
-      - name: Build iOS
+      - name: Build iOS (khong ky)
         script: |
           cd mobile
           flutter build ios --release --no-codesign
+      - name: Dong goi file .ipa chua ky (de Sideloadly/AltStore tu ky)
+        script: |
+          cd mobile/build/ios/iphoneos
+          rm -rf Payload FoodScanAI.ipa
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -qry FoodScanAI.ipa Payload
+          ls -lh FoodScanAI.ipa
     artifacts:
-      - mobile/build/ios/iphoneos/*.app
+      - mobile/build/ios/iphoneos/FoodScanAI.ipa
       - mobile/assets/models/food_detector.tflite
 
