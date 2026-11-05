@@ -1,0 +1,342 @@
+{
+  "class_00": {
+    "name_vi": "Bánh canh",
+    "name_en": "banh_canh",
+    "confidence": "high"
+  },
+  "class_01": {
+    "name_vi": "Bánh chưng",
+    "name_en": "banh_chung",
+    "confidence": "high"
+  },
+  "class_02": {
+    "name_vi": "Bánh cuốn",
+    "name_en": "banh_cuon",
+    "confidence": "high"
+  },
+  "class_03": {
+    "name_vi": "Chả trứng",
+    "name_en": "cha_trung",
+    "confidence": "high"
+  },
+  "class_04": {
+    "name_vi": "Bánh mì heo quay",
+    "name_en": "banh_mi_heo_quay",
+    "confidence": "high"
+  },
+  "class_05": {
+    "name_vi": "Bánh đa",
+    "name_en": "banh_da",
+    "confidence": "high"
+  },
+  "class_06": {
+    "name_vi": "Bánh tráng trộn",
+    "name_en": "banh_trang_tron",
+    "confidence": "high"
+  },
+  "class_07": {
+    "name_vi": "Bánh xèo miền Trung",
+    "name_en": "banh_xeo_mien_trung",
+    "confidence": "medium"
+  },
+  "class_08": {
+    "name_vi": "Bò kho chay",
+    "name_en": "bo_kho_chay",
+    "confidence": "high"
+  },
+  "class_09": {
+    "name_vi": "Bò lá lốt",
+    "name_en": "bo_la_lot",
+    "confidence": "high"
+  },
+  "class_10": {
+    "name_vi": "Bông cải xanh",
+    "name_en": "bong_cai_xanh",
+    "confidence": "high"
+  },
+  "class_11": {
+    "name_vi": "Bánh hỏi",
+    "name_en": "banh_hoi",
+    "confidence": "high"
+  },
+  "class_12": {
+    "name_vi": "Bún bò Huế",
+    "name_en": "bun_bo_hue",
+    "confidence": "high"
+  },
+  "class_13": {
+    "name_vi": "Bún chả Hà Nội",
+    "name_en": "bun_cha_ha_noi",
+    "confidence": "high"
+  },
+  "class_14": {
+    "name_vi": "Bún đậu mắm tôm",
+    "name_en": "bun_dau_mam_tom",
+    "confidence": "high"
+  },
+  "class_15": {
+    "name_vi": "Bún mắm",
+    "name_en": "bun_mam",
+    "confidence": "high"
+  },
+  "class_16": {
+    "name_vi": "Bún riêu chay",
+    "name_en": "bun_rieu_chay",
+    "confidence": "high"
+  },
+  "class_17": {
+    "name_vi": "Cá sốt cà chua",
+    "name_en": "ca_sot_ca_chua",
+    "confidence": "high"
+  },
+  "class_18": {
+    "name_vi": "Bánh mì thịt",
+    "name_en": "banh_mi_thit",
+    "confidence": "medium"
+  },
+  "class_19": {
+    "name_vi": "Bánh bột lọc",
+    "name_en": "banh_bot_loc",
+    "confidence": "high"
+  },
+  "class_20": {
+    "name_vi": "bò kho",
+    "name_en": "bo_kho",
+    "confidence": "medium"
+  },
+  "class_21": {
+    "name_vi": "Canh khoai mỡ",
+    "name_en": "canh_khoai_mo",
+    "confidence": "high"
+  },
+  "class_22": {
+    "name_vi": "Bún riêu cua",
+    "name_en": "bun_rieu_cua",
+    "confidence": "high"
+  },
+  "class_23": {
+    "name_vi": "Chả giò",
+    "name_en": "cha_gio",
+    "confidence": "high"
+  },
+  "class_24": {
+    "name_vi": "Trà chanh",
+    "name_en": "tra_chanh",
+    "confidence": "high"
+  },
+  "class_25": {
+    "name_vi": "Cơm trắng",
+    "name_en": "com_trang",
+    "confidence": "high"
+  },
+  "class_26": {
+    "name_vi": "Cơm tấm",
+    "name_en": "com_tam",
+    "confidence": "high"
+  },
+  "class_27": {
+    "name_vi": "Bánh mì",
+    "name_en": "banh_mi",
+    "confidence": "low"
+  },
+  "class_28": {
+    "name_vi": "Củ kiệu",
+    "name_en": "cu_kieu",
+    "confidence": "high"
+  },
+  "class_29": {
+    "name_vi": "Cua rang me",
+    "name_en": "cua_rang_me",
+    "confidence": "high"
+  },
+  "class_30": {
+    "name_vi": "Đậu phụ",
+    "name_en": "dau_phu",
+    "confidence": "high"
+  },
+  "class_31": {
+    "name_vi": "Dưa chua",
+    "name_en": "dua_chua",
+    "confidence": "high"
+  },
+  "class_32": {
+    "name_vi": "Mắm chưng",
+    "name_en": "mam_chung",
+    "confidence": "high"
+  },
+  "class_33": {
+    "name_vi": "Gỏi cuốn",
+    "name_en": "goi_cuon",
+    "confidence": "high"
+  },
+  "class_34": {
+    "name_vi": "Hamburger",
+    "name_en": "hamburger",
+    "confidence": "high"
+  },
+  "class_35": {
+    "name_vi": "Thịt heo quay",
+    "name_en": "thit_heo_quay",
+    "confidence": "high"
+  },
+  "class_36": {
+    "name_vi": "Hủ tiếu",
+    "name_en": "hu_tieu",
+    "confidence": "high"
+  },
+  "class_37": {
+    "name_vi": "Canh khổ qua nhồi thịt",
+    "name_en": "canh_kho_qua_nhoi_thit",
+    "confidence": "high"
+  },
+  "class_38": {
+    "name_vi": "Khoai tây chiên",
+    "name_en": "khoai_tay_chien",
+    "confidence": "high"
+  },
+  "class_39": {
+    "name_vi": "Lẩu Thái",
+    "name_en": "lau_thai",
+    "confidence": "high"
+  },
+  "class_40": {
+    "name_vi": "Lòng lợn",
+    "name_en": "long_lon",
+    "confidence": "high"
+  },
+  "class_41": {
+    "name_vi": "Mì trộn",
+    "name_en": "mi_tron",
+    "confidence": "high"
+  },
+  "class_42": {
+    "name_vi": "Mực trứng",
+    "name_en": "muc_trung",
+    "confidence": "high"
+  },
+  "class_43": {
+    "name_vi": "Nấm rơm kho tiêu",
+    "name_en": "nam_rom_kho_tieu",
+    "confidence": "high"
+  },
+  "class_44": {
+    "name_vi": "Ốc",
+    "name_en": "oc",
+    "confidence": "high"
+  },
+  "class_45": {
+    "name_vi": "Ớt chuông",
+    "name_en": "ot_chuong",
+    "confidence": "high"
+  },
+  "class_46": {
+    "name_vi": "Phở bò",
+    "name_en": "pho_bo",
+    "confidence": "high"
+  },
+  "class_47": {
+    "name_vi": "Phô mai",
+    "name_en": "pho_mai",
+    "confidence": "high"
+  },
+  "class_48": {
+    "name_vi": "Bún chả Hà Nội",
+    "name_en": "bun_cha_ha_noi",
+    "confidence": "high"
+  },
+  "class_49": {
+    "name_vi": "Bánh xèo chay",
+    "name_en": "banh_xeo_chay",
+    "confidence": "high"
+  },
+  "class_50": {
+    "name_vi": "Bò nhúng giấm",
+    "name_en": "bo_nhung_giam",
+    "confidence": "high"
+  },
+  "class_51": {
+    "name_vi": "Gà nướng",
+    "name_en": "ga_nuong",
+    "confidence": "high"
+  },
+  "class_52": {
+    "name_vi": "Bún bò giò heo",
+    "name_en": "bun_bo_gio_heo",
+    "confidence": "high"
+  },
+  "class_53": {
+    "name_vi": "Thịt kho trứng",
+    "name_en": "thit_kho_trung",
+    "confidence": "high"
+  },
+  "class_54": {
+    "name_vi": "Sườn nướng",
+    "name_en": "suon_nuong",
+    "confidence": "high"
+  },
+  "class_55": {
+    "name_vi": "Tôm cuộn khoai tây",
+    "name_en": "tom_cuon_khoai_tay",
+    "confidence": "high"
+  },
+  "class_56": {
+    "name_vi": "Bột chiên",
+    "name_en": "bot_chien",
+    "confidence": "high"
+  },
+  "class_57": {
+    "name_vi": "Xôi",
+    "name_en": "xoi",
+    "confidence": "high"
+  },
+  "class_58": {
+    "name_vi": "Bánh canh cua",
+    "name_en": "banh_canh_cua",
+    "confidence": "high"
+  },
+  "class_59": {
+    "name_vi": "Cao lầu",
+    "name_en": "cao_lau",
+    "confidence": "high"
+  },
+  "class_60": {
+    "name_vi": "Mì Quảng",
+    "name_en": "mi_quang",
+    "confidence": "high"
+  },
+  "class_61": {
+    "name_vi": "Cơm chiên Dương Châu",
+    "name_en": "com_chien_duong_chau",
+    "confidence": "high"
+  },
+  "class_62": {
+    "name_vi": "Bún mọc",
+    "name_en": "bun_moc",
+    "confidence": "high"
+  },
+  "class_63": {
+    "name_vi": "Cơm gà xối mỡ",
+    "name_en": "com_ga_xoi_mo",
+    "confidence": "high"
+  },
+  "class_64": {
+    "name_vi": "Cháo lòng",
+    "name_en": "chao_long",
+    "confidence": "high"
+  },
+  "class_65": {
+    "name_vi": "Gỏi bắp chuối",
+    "name_en": "goi_bap_chuoi",
+    "confidence": "high"
+  },
+  "class_66": {
+    "name_vi": "Nui xào bò",
+    "name_en": "nui_xao_bo",
+    "confidence": "high"
+  },
+  "class_67": {
+    "name_vi": "Súp cua",
+    "name_en": "sup_cua",
+    "confidence": "high"
+  }
+}

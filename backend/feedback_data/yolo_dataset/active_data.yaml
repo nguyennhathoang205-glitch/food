@@ -1,0 +1,5 @@
+# Auto-generated Active Learning YOLO Dataset
+path: C:\Users\Administrator\Desktop\food-scan-app\food-scan-app\backend\feedback_data\yolo_dataset
+train: images/train
+val: images/train
+nc: 68

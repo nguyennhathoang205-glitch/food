@@ -1,0 +1,6 @@
+train: images/train
+val: images/valid
+test: images/test
+
+nc: 68
+names: ['banh_canh', 'banh_chung', 'banh_cuon', 'cha_trung', 'banh_mi_heo_quay', 'banh_da', 'banh_trang_tron', 'banh_xeo_mien_trung', 'bo_kho_chay', 'bo_la_lot', 'bong_cai_xanh', 'banh_hoi', 'bun_bo_hue', 'bun_cha_ha_noi', 'bun_dau_mam_tom', 'bun_mam', 'bun_rieu_chay', 'ca_sot_ca_chua', 'banh_mi_thit', 'banh_bot_loc', 'bo_kho', 'canh_khoai_mo', 'bun_rieu_cua', 'cha_gio', 'tra_chanh', 'com_trang', 'com_tam', 'banh_mi', 'cu_kieu', 'cua_rang_me', 'dau_phu', 'dua_chua', 'mam_chung', 'goi_cuon', 'hamburger', 'thit_heo_quay', 'hu_tieu', 'canh_kho_qua_nhoi_thit', 'khoai_tay_chien', 'lau_thai', 'long_lon', 'mi_tron', 'muc_trung', 'nam_rom_kho_tieu', 'oc', 'ot_chuong', 'pho_bo', 'pho_mai', 'bun_cha_ha_noi', 'banh_xeo_chay', 'bo_nhung_giam', 'ga_nuong', 'bun_bo_gio_heo', 'thit_kho_trung', 'suon_nuong', 'tom_cuon_khoai_tay', 'bot_chien', 'xoi', 'banh_canh_cua', 'cao_lau', 'mi_quang', 'com_chien_duong_chau', 'bun_moc', 'com_ga_xoi_mo', 'chao_long', 'goi_bap_chuoi', 'nui_xao_bo', 'sup_cua']

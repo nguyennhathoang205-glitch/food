@@ -1,0 +1,50 @@
+# ===== Bi mat: KHONG BAO GIO dua len GitHub =====
+.env
+*.env
+!.env.example
+
+# ===== Python =====
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# ===== Dataset (rat nang, tai lai tu Kaggle / tao lai bang script) =====
+backend/dataset/
+backend/dataset_fruit/
+backend/fruit_dataset/
+backend/class_samples/
+*.cache
+*.npy
+
+# ===== Ket qua train / danh gia (tao lai duoc) =====
+backend/runs/
+backend/runs_food_detect/
+backend/runs_fruit_detect/
+backend/runs_eval/
+runs/
+
+# ===== Trong so goc Ultralytics (tu tai lai khi chay) =====
+backend/yolo26s.pt
+backend/yolov8s.pt
+backend/yolov8s-worldv2.pt
+backend/yolo*.pt
+# Giu lai model da train trong backend/models/ (moi file ~20MB, duoi gioi han 100MB)
+!backend/models/*.pt
+
+# ===== Flutter =====
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.idea/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Pods/
+
+# ===== IDE / He dieu hanh =====
+.idea/
+.vscode/
+*.log
+Thumbs.db
+.DS_Store

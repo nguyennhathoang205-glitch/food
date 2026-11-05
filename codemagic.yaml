@@ -1,0 +1,54 @@
+workflows:
+  ios-offline-ai:
+    name: iOS - FoodScan AI (TFLite offline)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      # Dung bundle id cua ban (doi com.example.mobile neu can).
+      vars:
+        BUNDLE_ID: "com.example.mobile"
+      # Chon 1 trong 2 cach ky (xem huong dan trong Codemagic):
+      #  - Co Apple Developer: bat ios_signing + app_store_connect ben duoi.
+      #  - Chua co: chi build kiem tra (--no-codesign), chua cai len iPhone that duoc.
+      # ios_signing:
+      #   distribution_type: ad_hoc
+      #   bundle_identifier: com.example.mobile
+    scripts:
+      - name: Xuat YOLO sang TFLite (Codemagic chay macOS nen ho tro LiteRT)
+        script: |
+          python3 -m venv .venv-export
+          source .venv-export/bin/activate
+          pip install --upgrade pip
+          pip install ultralytics
+          cd backend
+          python - <<'PY'
+          from ultralytics import YOLO
+          import glob, shutil
+          m = YOLO("models/food_detector_yolo26.pt")
+          m.export(format="tflite", imgsz=640)
+          out = glob.glob("models/food_detector_yolo26_saved_model/*float32.tflite") \
+              + glob.glob("models/*.tflite") + glob.glob("**/*.tflite", recursive=True)
+          assert out, "Khong tim thay file .tflite sau khi xuat"
+          shutil.copy(out[0], "../mobile/assets/models/food_detector.tflite")
+          print("Da copy:", out[0])
+          PY
+      - name: Flutter packages
+        script: |
+          cd mobile
+          flutter pub get
+      - name: Phan tich & test
+        script: |
+          cd mobile
+          flutter analyze
+          flutter test
+      - name: Build iOS
+        script: |
+          cd mobile
+          flutter build ios --release --no-codesign
+    artifacts:
+      - mobile/build/ios/iphoneos/*.app
+      - mobile/assets/models/food_detector.tflite
+

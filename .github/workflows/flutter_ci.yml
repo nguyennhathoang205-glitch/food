@@ -1,0 +1,48 @@
+name: FoodScan AI CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-test:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Backend Health & Drug Interaction Tests
+        run: python -m unittest discover -s . -p "test_*.py" -v
+        working-directory: ./backend
+
+  test:
+    name: Flutter Test & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: ./mobile
+
+      - name: Run code analyzer
+        run: flutter analyze
+        working-directory: ./mobile
+
+      - name: Run unit & widget tests
+        run: flutter test --coverage
+        working-directory: ./mobile

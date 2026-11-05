@@ -1,0 +1,22 @@
+[
+  {
+    "model": "YOLOv8s (cu, 30% data)",
+    "weights": "C:\\Users\\admin\\Desktop\\food-scan-app\\backend\\models\\food_detector.pt",
+    "mAP50": 0.7314,
+    "mAP50_95": 0.5923,
+    "precision": 0.7475,
+    "recall": 0.6623,
+    "inference_ms_per_image": 4.53,
+    "size_mb": 21.5
+  },
+  {
+    "model": "YOLO26s (moi)",
+    "weights": "C:\\Users\\admin\\Desktop\\food-scan-app\\backend\\models\\food_detector_yolo26.pt",
+    "mAP50": 0.7959,
+    "mAP50_95": 0.6582,
+    "precision": 0.826,
+    "recall": 0.7186,
+    "inference_ms_per_image": 4.43,
+    "size_mb": 19.4
+  }
+]

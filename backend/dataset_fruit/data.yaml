@@ -1,0 +1,7 @@
+path: C:/Users/admin/Desktop/food-scan-app/backend/dataset_fruit
+train: images/train
+val: images/val
+test: images/test
+
+nc: 20
+names: ['Apple', 'Avocado', 'Banana', 'Blackberry', 'Blueberry', 'Cantaloupe', 'Cherry', 'Dragon', 'Durian', 'Grape', 'Kiwi', 'Lychee', 'Mango', 'Orange', 'PassionFruit', 'Pear', 'Pineapple', 'Pomegranate', 'Strawberry', 'Watermelon']

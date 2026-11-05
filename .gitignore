@@ -1,0 +1,23 @@
+venv/
+__pycache__/
+.env
+dataset/
+*.pt
+build/
+.dart_tool/
+.venv/
+*.pyc
+
+backend/users.json
+backend/.auth_secret
+backend/health_profiles.json
+backend/water_log.json
+
+# Cho phep model mon an (can cho Codemagic xuat TFLite)
+!backend/models/food_detector_yolo26.pt
+
+# Du lieu cuc bo / ket qua huan luyen nang
+backend/exercise_logs.json
+backend/test.jpg
+backend/runs_fruit_detect/
+*.cache

@@ -1,0 +1,21 @@
+﻿class_id,name_en,name_vi,calories_per_100g,protein_g,fat_g,carbs_g,fiber_g
+0,Apple,Táo,52,0.3,0.2,13.8,2.4
+1,Avocado,Bơ,160,2.0,14.7,8.5,6.7
+2,Banana,Chuối,89,1.1,0.3,22.8,2.6
+3,Blackberry,Mâm xôi đen,43,1.4,0.5,9.6,5.3
+4,Blueberry,Việt quất,57,0.7,0.3,14.5,2.4
+5,Cantaloupe,Dưa lưới,34,0.8,0.2,8.2,0.9
+6,Cherry,Cherry,63,1.1,0.2,16.0,2.1
+7,Dragon,Thanh long,60,1.2,0.0,13.0,3.0
+8,Durian,Sầu riêng,147,1.5,5.3,27.1,3.8
+9,Grape,Nho,69,0.7,0.2,18.1,0.9
+10,Kiwi,Kiwi,61,1.1,0.5,14.7,3.0
+11,Lychee,Vải,66,0.8,0.4,16.5,1.3
+12,Mango,Xoài,60,0.8,0.4,15.0,1.6
+13,Orange,Cam,47,0.9,0.1,11.8,2.4
+14,PassionFruit,Chanh dây,97,2.2,0.7,23.4,10.4
+15,Pear,Lê,57,0.4,0.1,15.2,3.1
+16,Pineapple,Dứa (thơm),50,0.5,0.1,13.1,1.4
+17,Pomegranate,Lựu,83,1.7,1.2,18.7,4.0
+18,Strawberry,Dâu tây,32,0.7,0.3,7.7,2.0
+19,Watermelon,Dưa hấu,30,0.6,0.2,7.6,0.4
