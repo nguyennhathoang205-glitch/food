@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mobile</string>
+	<string>FoodScan AI</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -24,6 +24,20 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>FoodScan AI cần camera để chụp món ăn, nhãn dinh dưỡng và mã vạch.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FoodScan AI cần truy cập thư viện ảnh để chọn ảnh món ăn.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FoodScan AI cần quyền lưu ảnh vào thư viện.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>FoodScan AI cần micro để nhập tên món ăn bằng giọng nói tiếng Việt.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>FoodScan AI cần nhận diện giọng nói để ghi nhanh bữa ăn.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>FoodScan AI cần vị trí GPS để đo quãng đường và calo tiêu hao khi chạy bộ, đi bộ hoặc đạp xe.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>FoodScan AI cần cảm biến chuyển động để đếm bước chân khi tập luyện.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

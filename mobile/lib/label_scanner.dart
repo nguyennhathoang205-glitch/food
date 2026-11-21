@@ -20,8 +20,9 @@ class NutritionLabelScannerView extends StatefulWidget {
     double protein,
     double fat,
     double carbs,
-    int portionG,
-  ) onAddMeal;
+    int portionG, [
+    Uint8List? imageBytes,
+  ]) onAddMeal;
 
   const NutritionLabelScannerView({
     super.key,
@@ -112,7 +113,7 @@ class _NutritionLabelScannerViewState extends State<NutritionLabelScannerView> {
     final portion =
         (((_result!['serving_size_g'] as num?)?.toInt() ?? 100) * _servings);
 
-    await widget.onAddMeal(name, cal, pro, fat, carb, portion);
+    await widget.onAddMeal(name, cal, pro, fat, carb, portion, _imageBytes);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -137,13 +138,13 @@ class _NutritionLabelScannerViewState extends State<NutritionLabelScannerView> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF123A31), Color(0xFF07201B)],
+                colors: [Color(0xFF059669), Color(0xFF0D9488)],
               ),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
+                  color: primary.withValues(alpha: 0.18),
+                  blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
               ],
@@ -153,10 +154,10 @@ class _NutritionLabelScannerViewState extends State<NutritionLabelScannerView> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: gold.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.22),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.document_scanner_rounded, color: gold, size: 22),
+                  child: const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -164,7 +165,7 @@ class _NutritionLabelScannerViewState extends State<NutritionLabelScannerView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Quét bảng Nutrition Facts',
+                        'Quét bảng dinh dưỡng bao bì ✨',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
@@ -173,10 +174,10 @@ class _NutritionLabelScannerViewState extends State<NutritionLabelScannerView> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'AI đọc calo, đường, muối, chất béo & cảnh báo dị ứng, bệnh lý ngay lập tức.',
+                        'Chụp mặt sau vỏ hộp để AI tự đọc calo, đạm, đường, muối giúp bạn.',
                         style: TextStyle(
-                          color: Color(0xFFC3D2CC),
-                          fontSize: 11,
+                          color: Color(0xFFECFDF5),
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
@@ -838,6 +839,7 @@ Widget _buildDiseaseBreakdown(List<dynamic> breakdown) {
             statusIcon = Icons.dangerous_rounded;
           }
 
+          final bool isAlert = level == 'orange' || level == 'red';
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(10),
@@ -845,8 +847,10 @@ Widget _buildDiseaseBreakdown(List<dynamic> breakdown) {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: userMatched ? gold : statusColor.withValues(alpha: 0.3),
-                width: userMatched ? 1.5 : 1.0,
+                color: (userMatched && isAlert)
+                    ? statusColor.withValues(alpha: 0.75)
+                    : statusColor.withValues(alpha: 0.28),
+                width: (userMatched && isAlert) ? 1.5 : 1.0,
               ),
             ),
             child: Column(
@@ -933,8 +937,9 @@ class BarcodeScannerView extends StatefulWidget {
     double protein,
     double fat,
     double carbs,
-    int portionG,
-  ) onAddMeal;
+    int portionG, [
+    Uint8List? imageBytes,
+  ]) onAddMeal;
 
   const BarcodeScannerView({
     super.key,
@@ -952,6 +957,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   final ImagePicker _picker = ImagePicker();
   bool _loading = false;
   String? _error;
+  Uint8List? _barcodeImageBytes;
   Map<String, dynamic>? _product;
   List<dynamic> _warnings = [];
   int _servings = 1;
@@ -1005,6 +1011,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     final bytes = await file.readAsBytes();
 
     setState(() {
+      _barcodeImageBytes = bytes;
       _loading = true;
       _error = null;
       _product = null;
@@ -1060,7 +1067,15 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     final portion =
         (((_product!['serving_size_g'] as num?)?.toInt() ?? 100) * _servings);
 
-    await widget.onAddMeal(name, cal, pro, fat, carb, portion);
+    await widget.onAddMeal(
+      name,
+      cal,
+      pro,
+      fat,
+      carb,
+      portion,
+      _barcodeImageBytes,
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1085,7 +1100,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF14201C), Color(0xFF0F5C4D)],
+                colors: [Color(0xFF059669), Color(0xFF0D9488)],
               ),
               borderRadius: BorderRadius.circular(18),
             ),
@@ -1094,10 +1109,10 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: gold.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.22),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.qr_code_scanner_rounded, color: gold, size: 22),
+                  child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -1105,7 +1120,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Tra cứu mã vạch sản phẩm',
+                        'Tra cứu mã vạch sản phẩm 🛒',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
@@ -1114,8 +1129,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Tra cứu cơ sở dữ liệu hàng triệu sản phẩm qua Open Food Facts.',
-                        style: TextStyle(color: Color(0xFFC3D2CC), fontSize: 11),
+                        'Nhập số hoặc chụp ảnh mã vạch để xem ngay thông tin dinh dưỡng.',
+                        style: TextStyle(color: Color(0xFFECFDF5), fontSize: 11.5),
                       ),
                     ],
                   ),
@@ -1189,18 +1204,68 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
                 ),
                 const SizedBox(height: 14),
 
-                // Chup ma vach qua camera
-                OutlinedButton.icon(
-                  onPressed: () => _scanBarcodeImage(ImageSource.camera),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primary,
-                    side: const BorderSide(color: primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.photo_camera_rounded, size: 18),
-                  label: const Center(child: Text('Chụp ảnh mã vạch trên bao bì')),
+                // Chup hoac chon anh ma vach
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _scanBarcodeImage(ImageSource.camera),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primary,
+                          side: const BorderSide(color: primary),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.photo_camera_rounded, size: 18),
+                        label: const Text('Chụp mã vạch'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _scanBarcodeImage(ImageSource.gallery),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryDark,
+                          side: const BorderSide(color: Color(0xFFA7F3D0)),
+                          backgroundColor: const Color(0xFFECFDF5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.photo_library_rounded, size: 18),
+                        label: const Text('Ảnh từ thư viện'),
+                      ),
+                    ),
+                  ],
                 ),
+                if (_barcodeImageBytes != null) ...[
+                  const SizedBox(height: 12),
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.memory(
+                          _barcodeImageBytes!,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: IconButton.filled(
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black54,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () => setState(() => _barcodeImageBytes = null),
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
 
                 const SizedBox(height: 12),
                 // Ma vach mau thu nghiem

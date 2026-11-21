@@ -130,11 +130,13 @@ class MacroTargetBars extends StatelessWidget {
 class WaterTrackerCard extends StatefulWidget {
   final String baseUrl;
   final String userKey;
+  final int saltyMealCount;
 
   const WaterTrackerCard({
     super.key,
     required this.baseUrl,
     required this.userKey,
+    this.saltyMealCount = 0,
   });
 
   @override
@@ -256,6 +258,52 @@ class _WaterTrackerCardState extends State<WaterTrackerCard> {
             ),
           ),
           const SizedBox(height: 14),
+          if (widget.saltyMealCount > 0) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F9FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFBAE6FD)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.water_drop_outlined,
+                    size: 16,
+                    color: Color(0xFF0284C7),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Bù nước theo độ mặn: Có ${widget.saltyMealCount} món đậm vị hôm nay (+${widget.saltyMealCount * 250} ml khuyến nghị)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0369A1),
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    onPressed: () => _add(250),
+                    child: const Text(
+                      'Uống bù',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0284C7),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Row(
             children: [
               _chip('+250 ml', () => _add(250)),
@@ -328,12 +376,14 @@ class SuggestionsCard extends StatefulWidget {
   final String baseUrl;
   final String userKey;
   final double remainingKcal;
+  final void Function(Map<String, dynamic> food)? onTapFood;
 
   const SuggestionsCard({
     super.key,
     required this.baseUrl,
     required this.userKey,
     required this.remainingKcal,
+    this.onTapFood,
   });
 
   @override
@@ -420,34 +470,71 @@ class _SuggestionsCardState extends State<SuggestionsCard> {
                   itemBuilder: (context, i) {
                     final f = items[i];
 
-                    return Container(
-                      width: 150,
-                      padding: const EdgeInsets.all(14),
-                      decoration: _cardDecoration(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${f['name_vi']}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _ink,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                            ),
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: widget.onTapFood == null
+                            ? null
+                            : () => widget.onTapFood!(f),
+                        child: Container(
+                          width: 158,
+                          padding: const EdgeInsets.all(14),
+                          decoration: _cardDecoration(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${f['name_vi']}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: _ink,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  if (widget.onTapFood != null) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _primary.withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        '+ Ghi',
+                                        style: TextStyle(
+                                          color: _primaryDark,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const Spacer(),
+                              Text(
+                                '${(f['calories'] as num).round()} kcal · '
+                                '${(f['protein_g'] as num).round()}g đạm',
+                                style: const TextStyle(
+                                  color: _primaryDark,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Spacer(),
-                          Text(
-                            '${(f['calories'] as num).round()} kcal · '
-                            '${(f['protein_g'] as num).round()}g đạm',
-                            style: const TextStyle(
-                              color: _primaryDark,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     );
                   },

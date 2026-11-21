@@ -11,6 +11,7 @@ export 'package:http/http.dart' hide get, post, put, delete, MultipartRequest;
 
 class MultipartRequest extends h.MultipartRequest {
   MultipartRequest(super.method, super.url) {
+    headers['ngrok-skip-browser-warning'] = 'true';
     if (AuthSession.token != null) {
       headers['Authorization'] = 'Bearer ${AuthSession.token}';
     }
@@ -73,6 +74,7 @@ class AuthSession {
 }
 
 Map<String, String> _withAuth(Map<String, String>? headers) => {
+  'ngrok-skip-browser-warning': 'true',
   ...?headers,
   if (AuthSession.token != null) 'Authorization': 'Bearer ${AuthSession.token}',
 };

@@ -4,6 +4,9 @@ import '../../core/app_config.dart';
 import '../../core/app_session.dart';
 import '../../models/models.dart';
 import '../../more_extras.dart' show HealthProfileCard;
+import '../community/family_meal_screen.dart';
+import '../community/recipes_screen.dart';
+import '../community/teach_food_screen.dart';
 import '../tdee_calculator_dialog.dart';
 
 // ============================================================
@@ -175,24 +178,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fontSize: 25,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 4),
+              const Text(
+                'Cá nhân hóa mục tiêu dinh dưỡng theo cơ thể của bạn 🌿',
+                style: TextStyle(
+                  color: Color(0xFF047857),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF1E7F6B), primaryDark],
+                    colors: [Color(0xFF059669), Color(0xFF0D9488)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(27),
+                  borderRadius: BorderRadius.circular(26),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.24),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     const CircleAvatar(
-                      radius: 34,
+                      radius: 32,
                       backgroundColor: Color(0x33FFFFFF),
                       child: Icon(
-                        Icons.person_rounded,
+                        Icons.sentiment_satisfied_alt_rounded,
                         color: Colors.white,
-                        size: 35,
+                        size: 34,
                       ),
                     ),
                     const SizedBox(width: 15),
@@ -207,14 +228,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
-                              fontSize: 17,
+                              fontSize: 18,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${widget.profile.dailyGoal.toStringAsFixed(0)} kcal/ngày',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
+                            '🎯 Mục tiêu: ${widget.profile.dailyGoal.toStringAsFixed(0)} kcal/ngày',
+                            style: const TextStyle(
+                              color: Color(0xFFECFDF5),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
                             ),
                           ),
                         ],
@@ -365,6 +388,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: widget.onHealthChanged,
               ),
               const SizedBox(height: 18),
+              // Cong dong & tien ich: gom 3 muc vao 1 the cho gon
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 8),
+                child: Text(
+                  'Cộng đồng & Tiện ích Gia đình',
+                  style: TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Icon(
+                          Icons.school_rounded,
+                          color: primaryDark,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'Dạy AI món mới (CLIP Few-shot)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Chụp 1–5 ảnh món đặc sản để AI nhận ra ngay',
+                        style: TextStyle(fontSize: 11.5),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => TeachFoodScreen.open(context),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Icon(
+                          Icons.family_restroom_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'Mâm cơm gia đình',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Quét mâm cơm chung & chia khẩu phần từng người',
+                        style: TextStyle(fontSize: 11.5),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () async {
+                        await FamilyMealScreen.open(context);
+                        widget.onHealthChanged?.call();
+                      },
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Icon(
+                          Icons.menu_book_rounded,
+                          color: Color(0xFFEA580C),
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'Sổ tay Công thức Cộng đồng',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Chia sẻ công thức tự tính calo & ghi nhật ký 1 chạm',
+                        style: TextStyle(fontSize: 11.5),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () async {
+                        await RecipesScreen.open(context);
+                        widget.onHealthChanged?.call();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 height: 50,

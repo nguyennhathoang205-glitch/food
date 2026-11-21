@@ -18,6 +18,8 @@ backend/water_log.json
 
 # Du lieu cuc bo / ket qua huan luyen nang
 backend/exercise_logs.json
+backend/weight_logs.json
+backend/meal_thumbs.json
 backend/test.jpg
 backend/runs_fruit_detect/
 *.cache

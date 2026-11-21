@@ -2,6 +2,10 @@
 // MEAL ENTRY MODEL
 // ============================================================
 
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
+
 import '../core/app_session.dart';
 import '../core/meal_slot.dart';
 
@@ -15,6 +19,7 @@ class MealEntry {
   final double proteinG;
   final double fatG;
   final double carbsG;
+  final String? thumb;
 
   MealEntry({
     this.id,
@@ -26,7 +31,30 @@ class MealEntry {
     required this.proteinG,
     required this.fatG,
     required this.carbsG,
+    this.thumb,
   });
+
+  /// Nen anh chup mon an thanh JPEG base64 nho (~8-15KB) de luu kem nhat ky.
+  static String? makeThumbnailBase64(Uint8List? rawBytes, {int maxSide = 160}) {
+    if (rawBytes == null || rawBytes.isEmpty) return null;
+    try {
+      final decoded = img.decodeImage(rawBytes);
+      if (decoded == null) return null;
+      final resized = decoded.width >= decoded.height
+          ? img.copyResize(
+              decoded,
+              width: decoded.width > maxSide ? maxSide : decoded.width,
+            )
+          : img.copyResize(
+              decoded,
+              height: decoded.height > maxSide ? maxSide : decoded.height,
+            );
+      final jpg = img.encodeJpg(resized, quality: 72);
+      return base64Encode(jpg);
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory MealEntry.fromJson(Map<String, dynamic> json) {
     DateTime date;
@@ -36,6 +64,7 @@ class MealEntry {
       date = DateTime.now();
     }
 
+    final rawThumb = json['thumb'];
     return MealEntry(
       id: (json['id'] as num?)?.toInt(),
       name: json['food_name'] ?? 'Không rõ',
@@ -46,6 +75,7 @@ class MealEntry {
       proteinG: (json['protein_g'] as num?)?.toDouble() ?? 0,
       fatG: (json['fat_g'] as num?)?.toDouble() ?? 0,
       carbsG: (json['carbs_g'] as num?)?.toDouble() ?? 0,
+      thumb: (rawThumb is String && rawThumb.isNotEmpty) ? rawThumb : null,
     );
   }
 
@@ -59,6 +89,7 @@ class MealEntry {
       'protein_g': proteinG,
       'fat_g': fatG,
       'carbs_g': carbsG,
+      if (thumb != null && thumb!.isNotEmpty) 'thumb': thumb,
     };
   }
 }

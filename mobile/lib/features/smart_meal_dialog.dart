@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/meal_slot.dart';
+import '../services/live_motion_tracker.dart';
 import '../services/meal_service.dart';
 
 class SmartMealDialog extends StatefulWidget {
@@ -48,9 +49,11 @@ class SmartMealDialog extends StatefulWidget {
 
 class _SmartMealDialogState extends State<SmartMealDialog> {
   final _textController = TextEditingController();
+  final _speechRecognizer = VoiceSpeechRecognizer();
   String _selectedMealType = MealSlot.forTime(DateTime.now());
   bool _isAnalyzing = false;
   bool _isSaving = false;
+  bool _isListeningVoice = false;
   ParsedMealResult? _parsedResult;
   List<double> _itemScales = [];
   String? _errorMessage;
@@ -150,8 +153,42 @@ class _SmartMealDialogState extends State<SmartMealDialog> {
     }
   }
 
+  void _toggleVoiceInput() {
+    if (_isListeningVoice) {
+      _speechRecognizer.stopListening();
+      setState(() => _isListeningVoice = false);
+      return;
+    }
+    setState(() {
+      _isListeningVoice = true;
+      _errorMessage = null;
+    });
+    _speechRecognizer.startListening(
+      onResult: (transcript) {
+        if (!mounted) return;
+        setState(() {
+          _textController.text = transcript;
+          _isListeningVoice = false;
+        });
+        _analyzeMeal();
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = err;
+          _isListeningVoice = false;
+        });
+      },
+      onDone: () {
+        if (!mounted) return;
+        setState(() => _isListeningVoice = false);
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _speechRecognizer.stopListening();
     _textController.dispose();
     super.dispose();
   }
@@ -234,13 +271,43 @@ class _SmartMealDialogState extends State<SmartMealDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Input TextField
+            // Input TextField + Nut Micro Giong Noi Tieng Viet
             TextField(
               controller: _textController,
               maxLines: 2,
               decoration: InputDecoration(
-                hintText: 'VD: trưa nay ăn 1 tô phở bò với 1 ly trà đá...',
-                hintStyle: GoogleFonts.plusJakartaSans(color: Colors.grey.shade400, fontSize: 13),
+                hintText: _isListeningVoice
+                    ? '🎙️ Đang lắng nghe bạn nói bằng tiếng Việt...'
+                    : 'VD: trưa nay ăn 1 tô phở bò với 1 ly trà đá...',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                  color: _isListeningVoice
+                      ? const Color(0xFFEF4444)
+                      : Colors.grey.shade400,
+                  fontSize: 13,
+                  fontWeight: _isListeningVoice
+                      ? FontWeight.w700
+                      : FontWeight.w400,
+                ),
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: IconButton(
+                    tooltip: 'Nói món ăn bằng giọng nói tiếng Việt',
+                    onPressed: _toggleVoiceInput,
+                    style: IconButton.styleFrom(
+                      backgroundColor: _isListeningVoice
+                          ? const Color(0xFFFEE2E2)
+                          : const Color(0xFFECFDF5),
+                    ),
+                    icon: Icon(
+                      _isListeningVoice
+                          ? Icons.stop_circle_rounded
+                          : Icons.mic_rounded,
+                      color: _isListeningVoice
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF059669),
+                    ),
+                  ),
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
@@ -254,6 +321,43 @@ class _SmartMealDialogState extends State<SmartMealDialog> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _toggleVoiceInput,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isListeningVoice
+                      ? const Color(0xFFDC2626)
+                      : const Color(0xFF059669),
+                  side: BorderSide(
+                    color: _isListeningVoice
+                        ? const Color(0xFFFECACA)
+                        : const Color(0xFFA7F3D0),
+                  ),
+                  backgroundColor: _isListeningVoice
+                      ? const Color(0xFFFEF2F2)
+                      : const Color(0xFFF0FDF4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                ),
+                icon: Icon(
+                  _isListeningVoice ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _isListeningVoice
+                      ? 'Đang nghe giọng nói tiếng Việt... (Bấm để dừng)'
+                      : '🎙️ Ghi món bằng Giọng nói tiếng Việt (Voice AI)',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

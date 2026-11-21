@@ -6,6 +6,8 @@ import json
 import time
 import uuid
 import base64
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from datetime import datetime, timedelta, timezone
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -21,6 +23,11 @@ import water as water_store
 import auth as auth_store
 import label_scan
 import active_learning
+import community_api
+import recipes_api
+import family_api
+import chat_agent_api
+import volume_3d
 
 
 # ============================================================
@@ -54,6 +61,8 @@ supabase: Client = create_client(
 auth_store.set_supabase_client(supabase)
 health_rules.set_supabase_client(supabase)
 water_store.set_supabase_client(supabase)
+active_learning.set_supabase_client(supabase)
+app.register_blueprint(volume_3d.bp)
 
 DEFAULT_USER_KEY = "demo-user"
 
@@ -117,7 +126,7 @@ GEMINI_API_KEYS = [
     if k.strip()
 ]
 
-GEMINI_MODEL_NAME = "gemini-3.6-flash"
+GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
 _gemini_key_index = 0
 
@@ -141,7 +150,7 @@ def switch_gemini_key():
     return False
 
 
-CHAT_SYSTEM_PROMPT = """Ban la tro ly dinh duong than thien trong app "Food Scan" - ung dung
+CHAT_SYSTEM_PROMPT = """Ban la tro ly dinh duong than thien trong app "FoodScan AI" - ung dung
 nhan dien mon an Viet Nam qua anh va tra ve thong tin dinh duong.
 
 Nhiem vu cua ban:
@@ -201,12 +210,17 @@ Yeu cau:
   + Neu anh khong co do an: de null.
 - "ingredients": 3-10 mon/thanh phan/loai trai cay NHIN THAY trong anh,
   moi phan tu la 1 cum tu ngan tieng Viet co dau.
-- "estimated_weight_g": uoc tinh TONG KHOI LUONG do an trong anh (gam), dua
-  vao kich thuoc dia/to/bat va muc do day cua do an (1 chen com day khoang
-  200g, 1 to bun/pho khoang 500g, 1 dia com tam khoang 400g). So nguyen.
+- "estimated_weight_g": uoc tinh TONG KHOI LUONG phan an (gam) sat thuc te
+  khau phan 1 nguoi Viet an:
+  + 1 dia com tam / com suon / com ga tieu chuan: 350 - 400g (~600-680 kcal,
+    30-35g dam, 20-25g beo, 65-75g carb).
+  + 1 to pho / bun bo / bun rieu tieu chuan: 400 - 450g (~450-550 kcal,
+    25-32g dam, 12-18g beo, 55-65g carb).
+  + 1 o banh mi thit / trung: 180 - 220g (~380-450 kcal, 16-22g dam).
+  KHONG phong dai khoi luong hay luong dam vuot qua khau phan 1 dia tieu chuan.
 - "estimated_total": uoc tinh dinh duong cho TOAN BO luong do an trong anh
   (khong phai tren 100g); calories la so nguyen, con lai la so thuc don vi
-  gam. Uoc tinh gan dung la duoc.
+  gam. Uoc tinh sat thuc te dinh duong Viet Nam.
 - Chi tra ve JSON thuan, khong them chu ```json hay bat ky dinh dang nao
   khac."""
 
@@ -248,18 +262,42 @@ def _parse_dish_analysis_json(raw_text):
 
     total_raw = data.get("estimated_total") or {}
 
+    cal = number_or_zero(total_raw.get("calories"))
+    pro = number_or_zero(total_raw.get("protein_g"))
+    fat = number_or_zero(total_raw.get("fat_g"))
+    carb = number_or_zero(total_raw.get("carbs_g"))
+    weight_g = number_or_zero(data.get("estimated_weight_g"))
+
+    # Hieu chinh (calibration) neu Gemini uoc tinh phong dai cho 1 dia/to don:
+    # 1 dia com tam / bun / pho 1 nguoi an tieu chuan nam trong khoang 350-410g
+    # (khong phai 550g hay 55g dam). Khi chon "Vua (100%)" tren app, <= 420g
+    # se khop dung "1 to/dia tieu chuan".
+    dish_lower = (main_dish or "").lower()
+    is_multi_feast = any(k in dish_lower for k in ("mâm cơm", "mam com", "lẩu", "lau", "tiệc", "combo"))
+    if not is_multi_feast:
+        if weight_g > 410:
+            scale_w = 380.0 / weight_g
+            weight_g = 380
+            if cal > 700:
+                cal = round(cal * max(scale_w, 0.74))
+                pro = round(pro * max(scale_w, 0.65), 1)
+                fat = round(fat * max(scale_w, 0.68), 1)
+                carb = round(carb * max(scale_w, 0.85), 1)
+        if pro > 38 and cal < 900:
+            pro = round(min(pro * 0.68, 36.0), 1)
+
     estimated_total = {
-        "calories": number_or_zero(total_raw.get("calories")),
-        "protein_g": number_or_zero(total_raw.get("protein_g")),
-        "fat_g": number_or_zero(total_raw.get("fat_g")),
-        "carbs_g": number_or_zero(total_raw.get("carbs_g")),
+        "calories": round(cal),
+        "protein_g": round(pro, 1),
+        "fat_g": round(fat, 1),
+        "carbs_g": round(carb, 1),
     }
 
     return {
         "main_dish": main_dish,
         "ingredients": ingredients,
         "estimated_total": estimated_total,
-        "estimated_weight_g": number_or_zero(data.get("estimated_weight_g")),
+        "estimated_weight_g": round(weight_g),
     }
 
 
@@ -296,20 +334,20 @@ def analyze_dish_with_gemini(
 
     last_error = None
     keys_tried = 0
+    max_keys_per_request = min(len(GEMINI_API_KEYS), 2)
+    models_to_try = ["gemini-2.5-flash"]
+    if GEMINI_MODEL_NAME and GEMINI_MODEL_NAME not in models_to_try:
+        models_to_try.append(GEMINI_MODEL_NAME)
 
-    while keys_tried < len(GEMINI_API_KEYS):
+    while keys_tried < max_keys_per_request:
         client = get_gemini_client()
         if client is None:
             break
 
-        # Gemini qua tai (503) la loi tam thoi, thu lai vai lan tren CUNG
-        # 1 key truoc khi bo cuoc voi key do (cho vai giay giua moi lan).
-        retries_left = 3
-
-        while retries_left > 0:
+        for candidate_model in models_to_try:
             try:
                 response = client.models.generate_content(
-                    model=GEMINI_MODEL_NAME,
+                    model=candidate_model,
                     contents=[
                         types.Part.from_bytes(
                             data=image_bytes,
@@ -326,18 +364,15 @@ def analyze_dish_with_gemini(
 
             except json.JSONDecodeError as e:
                 last_error = f"JSON khong hop le: {e}"
-
                 break
 
             except Exception as e:
                 last_error = str(e)
-
-                retries_left -= 1
-
-                if _is_temporary_error(last_error) and retries_left > 0:
-                    time.sleep(1.5)
+                if "NOT_FOUND" in last_error or "404" in last_error:
+                    # Thu model fallback ngay tren cung key
                     continue
-
+                if _is_temporary_error(last_error):
+                    time.sleep(0.4)
                 break
 
         keys_tried += 1
@@ -348,6 +383,143 @@ def analyze_dish_with_gemini(
     print(f"Khong phan tich duoc mon an qua Gemini: {last_error}")
 
     return None
+
+
+# Danh sach thanh phan mac dinh khi fallback sang YOLO (hoac khi Gemini khong
+# tra ve ingredients) de nguoi dung luon xem duoc chi tiet tung thanh phan mon an.
+_DEFAULT_DISH_INGREDIENTS = {
+    "cơm tấm": [
+        "Cơm tấm",
+        "Sườn heo nướng",
+        "Bì heo trộn thính",
+        "Chả trứng hấp",
+        "Trứng ốp la",
+        "Đồ chua & dưa leo",
+        "Mỡ hành & nước mắm",
+    ],
+    "phở": [
+        "Bánh phở tươi",
+        "Thịt bò / gà thái lát",
+        "Nước dùng hầm xương",
+        "Hành lá & ngò gai",
+        "Giá đỗ & rau thơm",
+    ],
+    "bún bò": [
+        "Bún sợi to",
+        "Thịt bắp bò & giò heo",
+        "Chả cua / chả bò",
+        "Nước dùng sả ruốc",
+        "Rau muống bào & bắp chuối",
+    ],
+    "bún chả": [
+        "Bún tươi",
+        "Chả thịt heo nướng",
+        "Thịt ba chỉ nướng",
+        "Đu đủ & cà rốt ngâm chua",
+        "Nước mắm chua ngọt & rau sống",
+    ],
+    "bún thịt nướng": [
+        "Bún tươi",
+        "Thịt heo nướng sả",
+        "Chả giò chiên",
+        "Đậu phộng & mỡ hành",
+        "Đồ chua, rau sống & nước mắm",
+    ],
+    "bún đậu": [
+        "Bún lá ép",
+        "Đậu hũ chiên giòn",
+        "Thịt chân giò luộc",
+        "Chả cốm & dồi sụn",
+        "Rau kinh giới, tía tô & mắm tôm",
+    ],
+    "bún riêu": [
+        "Bún tươi",
+        "Riêu cua đồng & đậu hũ",
+        "Cà chua & huyết/giò",
+        "Nước dùng chua thanh",
+        "Rau sống & hoa chuối",
+    ],
+    "bánh mì": [
+        "Bánh mì vỏ giòn",
+        "Thịt nguội / thịt nướng & chả lụa",
+        "Pate gan & sốt bơ",
+        "Đồ chua (cà rốt, củ cải)",
+        "Dưa leo, ngò rí & ớt",
+    ],
+    "bánh xèo": [
+        "Vỏ bánh bột gạo nghệ giòn",
+        "Tôm tươi & thịt ba chỉ",
+        "Giá đỗ & đậu xanh",
+        "Rau cải, xà lách & rau thơm",
+        "Nước mắm chua ngọt",
+    ],
+    "gỏi cuốn": [
+        "Bánh tráng gạo",
+        "Tôm luộc & thịt heo luộc",
+        "Bún tươi",
+        "Xà lách, hẹ & rau thơm",
+        "Tương chấm / mắm nêm",
+    ],
+    "hủ tiếu": [
+        "Sợi hủ tiếu dai",
+        "Thịt heo, tôm & trứng cút",
+        "Nước dùng ninh xương",
+        "Giá đỗ, hẹ & hành phi",
+    ],
+    "mì quảng": [
+        "Sợi mì Quảng nghệ",
+        "Tôm, thịt heo / gà & trứng",
+        "Nước nhân đậm đà",
+        "Bánh đa nướng & đậu phộng",
+        "Rau sống trà quế",
+    ],
+    "cơm gà": [
+        "Cơm nấu nước luộc gà",
+        "Thịt gà xé / gà quay",
+        "Dưa leo & đồ chua",
+        "Hành ngò & nước chấm gừng",
+    ],
+    "cơm chiên": [
+        "Cơm rang trứng vàng",
+        "Xúc xích / lạp xưởng / tôm thịt",
+        "Đậu Hà Lan, cà rốt & bắp ngọt",
+        "Hành lá & dưa leo ăn kèm",
+    ],
+    "bánh cuốn": [
+        "Bánh cuốn bột gạo tráng mỏng",
+        "Nhân thịt heo băm & mộc nhĩ",
+        "Chả lụa & hành phi",
+        "Giá trụng, rau thơm & nước mắm",
+    ],
+}
+
+
+def infer_default_ingredients(dish_name, detections=None):
+    """Suy luan danh sach thanh phan mon an khi Gemini chua tra ve."""
+    low = (dish_name or "").lower()
+    for key, items in _DEFAULT_DISH_INGREDIENTS.items():
+        if key in low:
+            return list(items)
+    if detections:
+        names = []
+        for d in detections:
+            n = str(d.get("name_vi") or "").strip()
+            if n and n not in names:
+                names.append(n)
+            for key, items in _DEFAULT_DISH_INGREDIENTS.items():
+                if key in n.lower():
+                    return list(items)
+        if len(names) > 1:
+            return names
+    if "bún" in low:
+        return ["Bún tươi", "Thịt / Đạm chính", "Nước dùng / Nước chấm", "Rau sống & gia vị"]
+    if "cơm" in low:
+        return ["Cơm trắng", "Thịt / Đạm chính", "Rau củ & đồ chua", "Gia vị & nước chấm"]
+    if "bánh" in low:
+        return ["Phần bột bánh chính", "Nhân thịt / tôm / đậu", "Rau ăn kèm & nước chấm"]
+    if dish_name:
+        return [dish_name, "Nguyên liệu đạm & tinh bột", "Rau gia vị đi kèm"]
+    return []
 
 
 # ============================================================
@@ -410,6 +582,50 @@ def number_or_zero(value):
 
     except (TypeError, ValueError):
         return 0.0
+
+
+# Supabase luu created_at theo gio UTC. Neu cat chuoi [:10] de lay ngay thi bua
+# an tu 0h-7h sang (gio Viet Nam) bi tinh vao NGAY HOM TRUOC -> phai doi mui gio.
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def local_datetime(created_at):
+    """Doi created_at (ISO, UTC) sang gio Viet Nam. Tra ve None neu khong doc duoc."""
+    text = str(created_at or "").strip()
+
+    if not text:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    return dt.astimezone(VN_TZ)
+
+
+def local_day(created_at):
+    """Ngay (YYYY-MM-DD) theo gio Viet Nam, "" neu khong doc duoc."""
+    dt = local_datetime(created_at)
+    return dt.strftime("%Y-%m-%d") if dt else ""
+
+
+def jpeg_for_gemini(raw_bytes, max_side=1600):
+    """Ma hoa lai anh thanh JPEG that truoc khi gui Gemini (Flutter gui
+    "application/octet-stream", anh co the la PNG/HEIC). Tra ve None neu
+    khong phai anh hop le."""
+    try:
+        image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+    except Exception:
+        return None
+
+    image.thumbnail((max_side, max_side))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=92)
+    return buffer.getvalue()
 
 
 # ============================================================
@@ -701,8 +917,58 @@ def save_profile(user_key):
 
 
 # ============================================================
-# MEAL LOGS
+# MEAL LOGS & THUMBNAIL STORE
 # ============================================================
+
+_MEAL_THUMBS_PATH = os.path.join(BASE_DIR, "meal_thumbs.json")
+
+
+def _load_meal_thumbs():
+    try:
+        if os.path.exists(_MEAL_THUMBS_PATH):
+            with open(_MEAL_THUMBS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        pass
+    return {}
+
+
+def _save_meal_thumb(meal_id, thumb_b64):
+    if not meal_id or not thumb_b64:
+        return
+    try:
+        thumbs = _load_meal_thumbs()
+        thumbs[str(meal_id)] = str(thumb_b64)[:60000]
+        # Giu toi da 300 anh thumbnail gan nhat de file nhe
+        if len(thumbs) > 300:
+            keys = list(thumbs.keys())[-300:]
+            thumbs = {k: thumbs[k] for k in keys}
+        with open(_MEAL_THUMBS_PATH, "w", encoding="utf-8") as f:
+            json.dump(thumbs, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _attach_meal_thumbs(rows):
+    if not rows:
+        return rows
+    thumbs = _load_meal_thumbs()
+    if not thumbs:
+        return rows
+    out = []
+    for r in rows:
+        if isinstance(r, dict):
+            item = dict(r)
+            mid = str(item.get("id") or "")
+            if mid and mid in thumbs and not item.get("thumb"):
+                item["thumb"] = thumbs[mid]
+            out.append(item)
+        else:
+            out.append(r)
+    return out
+
 
 @app.route(
     "/api/meals/<user_key>",
@@ -729,7 +995,7 @@ def get_meals(user_key):
         return jsonify({
             "status": "ok",
             "meals":
-                response.data
+                _attach_meal_thumbs(response.data or [])
         })
 
     except Exception as e:
@@ -844,10 +1110,16 @@ def create_meal():
             .execute()
         )
 
+        saved_meal = dict(response.data[0]) if response.data else dict(meal_data)
+        thumb_b64 = data.get("thumb")
+        if isinstance(thumb_b64, str) and thumb_b64.strip():
+            _save_meal_thumb(saved_meal.get("id"), thumb_b64.strip())
+            saved_meal["thumb"] = thumb_b64.strip()
+
         return jsonify({
             "status": "ok",
             "meal":
-                response.data[0]
+                saved_meal
         })
 
     except Exception as e:
@@ -944,9 +1216,11 @@ def update_meal(meal_id):
                 "message": "Khong tim thay bua an"
             }), 404
 
+        updated_row = _attach_meal_thumbs(response.data)[0]
+
         return jsonify({
             "status": "ok",
-            "meal": response.data[0]
+            "meal": updated_row
         })
 
     except Exception as e:
@@ -1169,7 +1443,8 @@ def _save_feedback_sample(image_base64, box, class_id, corrected_name, user_key)
             "yes" if line else "no",
         ])
 
-    image_path = os.path.relpath(os.path.join(img_dir, f"{file_id}.jpg"), BASE_DIR)
+    local_rel_path = os.path.relpath(os.path.join(img_dir, f"{file_id}.jpg"), BASE_DIR)
+    image_path = local_rel_path
 
     try:
         supabase.storage.from_("feedback").upload(
@@ -1181,7 +1456,7 @@ def _save_feedback_sample(image_base64, box, class_id, corrected_name, user_key)
     except Exception as ex:
         print(f"Supabase storage upload info: {ex}")
 
-    return image_path
+    return image_path, local_rel_path
 
 @app.route(
     "/api/feedback",
@@ -1230,10 +1505,11 @@ def create_feedback():
             corrected_class_id = _class_id_by_name(corrected_name)
 
         image_path = None
+        local_image_path = None
 
         if image_base64:
             try:
-                image_path = _save_feedback_sample(
+                image_path, local_image_path = _save_feedback_sample(
                     image_base64, bounding_box,
                     corrected_class_id, corrected_name, user_key
                 )
@@ -1279,9 +1555,37 @@ def create_feedback():
             )
             ret_data = response.data[0] if response.data else feedback_data
         except Exception:
-            ret_data = feedback_data
+            try:
+                response = (
+                    supabase
+                    .table("feedback_logs")
+                    .insert({
+                        "user_key": user_key,
+                        "predicted_name": predicted_name,
+                        "predicted_class_id": data.get("predicted_class_id"),
+                        "actual_name": corrected_name,
+                        "actual_class_id": corrected_class_id,
+                        "confidence": number_or_zero(data.get("predicted_confidence")),
+                        "bounding_box": bounding_box,
+                        "image_filename": local_image_path or image_path,
+                    })
+                    .execute()
+                )
+                ret_data = response.data[0] if response.data else feedback_data
+            except Exception:
+                ret_data = feedback_data
 
         try:
+            active_learning.record_feedback_entry(
+                user_key=user_key,
+                predicted_name=predicted_name,
+                corrected_name=corrected_name,
+                predicted_class_id=data.get("predicted_class_id"),
+                corrected_class_id=corrected_class_id,
+                confidence=number_or_zero(data.get("predicted_confidence")),
+                bounding_box=bounding_box,
+                image_path=local_image_path,
+            )
             active_learning.export_feedback_to_yolo(_foods_cache)
         except Exception:
             pass
@@ -1367,15 +1671,21 @@ def detect():
                 f"Anh khong hop le: {e}"
         }), 400
 
-    # Anh gui cho Gemini: ma hoa lai thanh JPEG chuan. KHONG dung loai file
-    # do client khai bao - Flutter gui "application/octet-stream" nen Gemini
-    # khong doc duoc anh va tu bịa ket qua tu vi du trong prompt. Thu nho
-    # con toi da 1024px cho nhanh va do ton quota.
+    # Anh gui cho Gemini: thu nho con toi da 640px (quality 80) de upload
+    # nhanh gấp 4 lần, va chay SONG SONG voi YOLO trong ThreadPoolExecutor.
     gemini_image = image.copy()
-    gemini_image.thumbnail((1024, 1024))
+    gemini_image.thumbnail((640, 640))
     gemini_buffer = io.BytesIO()
-    gemini_image.save(gemini_buffer, format="JPEG", quality=90)
+    gemini_image.save(gemini_buffer, format="JPEG", quality=80)
     gemini_image_bytes = gemini_buffer.getvalue()
+
+    gemini_executor = ThreadPoolExecutor(max_workers=1)
+    gemini_future = gemini_executor.submit(
+        analyze_dish_with_gemini,
+        gemini_image_bytes,
+        "image/jpeg",
+        scan_mode,
+    )
 
     # Chay tung model, gom tat ca box lai kem id_offset cua model do (de
     # tra dung dong trong bang foods: do an id 0-67, trai cay id 1000+).
@@ -1489,7 +1799,7 @@ def detect():
 
             portion_g = round(
                 DEFAULT_PORTION_G *
-                min(max(area_frac / 0.25, 0.5), 2.0) / 5.0
+                min(max(area_frac / 0.25, 0.6), 1.67) / 5.0
             ) * 5
 
             factor = (
@@ -1634,15 +1944,16 @@ def detect():
             }
         })
 
-    # Hoi Gemini Vision phan tich NGUYEN tam anh: ten mon CHINH, danh sach
-    # nguyen lieu, va uoc tinh dinh duong cho ca phan an. Day la nguon tin
-    # cay hon YOLO cho ca 3 thu nay, vi YOLO chi co 68 class co dinh va hay
-    # tach 1 to/mam thanh nhieu "mon" rieng sai lech (xem comment o tren).
-    gemini_analysis = analyze_dish_with_gemini(
-        gemini_image_bytes,
-        "image/jpeg",
-        scan_mode
-    )
+    # Lay ket qua Gemini Vision da chay song song voi YOLO. Neu YOLO da nhan
+    # dien duoc mon an (detections khong rong), gioi han cho Gemini toi da 4.5s
+    # de nguoi dung khong bao gio phai doi lau.
+    gemini_timeout = 4.5 if detections else 8.0
+    try:
+        gemini_analysis = gemini_future.result(timeout=gemini_timeout)
+    except (FuturesTimeoutError, Exception):
+        gemini_analysis = None
+    finally:
+        gemini_executor.shutdown(wait=False)
 
     # YOLO van duoc dung lam fallback khi Gemini loi/het quota, va de ve
     # bounding box len anh cho sinh dong (field "detections" ben duoi).
@@ -1669,10 +1980,39 @@ def detect():
         total_nutrition = gemini_total if has_real_total else yolo_total
         nutrition_source = "gemini" if has_real_total else "yolo"
     else:
-        main_dish = None
+        main_dish = detections[0]["name_vi"] if detections else None
         ingredients = []
         total_nutrition = yolo_total
         nutrition_source = "yolo"
+
+    if not ingredients:
+        fallback_dish_name = main_dish or (detections[0]["name_vi"] if detections else "")
+        ingredients = infer_default_ingredients(fallback_dish_name, detections)
+
+    # Mon do CONG DONG day (khong nam trong 68 lop YOLO). Chi chay CLIP khi
+    # YOLO chua nhan dien chac chan (< 0.55) de tiet kiem ~1s CPU cho cac mon
+    # quen thuoc nhu Pho, Com tam, Bun bo.
+    best_yolo_conf = max((d["confidence"] for d in detections), default=0.0)
+    community_match = (
+        community_api.match_for_detect(image)
+        if best_yolo_conf < 0.55
+        else None
+    )
+
+    if community_match:
+        if not main_dish and not detections:
+            main_dish = community_match.get("name_vi")
+        if total_nutrition.get("calories", 0) <= 0:
+            c_kcal_100 = number_or_zero(community_match.get("calories_per_100g"))
+            if c_kcal_100 > 0:
+                factor = 3.0  # khau phan tieu chuan ~300g
+                total_nutrition = {
+                    "calories": round(c_kcal_100 * factor, 1),
+                    "protein_g": round(number_or_zero(community_match.get("protein_g")) * factor, 1),
+                    "fat_g": round(number_or_zero(community_match.get("fat_g")) * factor, 1),
+                    "carbs_g": round(number_or_zero(community_match.get("carbs_g")) * factor, 1),
+                }
+                nutrition_source = "community_clip"
 
     estimated_weight_g = (
         gemini_analysis.get("estimated_weight_g") if gemini_analysis else 0
@@ -1704,6 +2044,15 @@ def detect():
         }
     )
 
+    dish_for_3d = main_dish or (detections[0]["name_vi"] if detections else "Món ăn")
+    vol_3d = volume_3d.estimate_3d_volume(
+        image=image,
+        dish_name=dish_for_3d,
+        ingredients=ingredients,
+        total_nutrition=total_nutrition,
+        detections=detections,
+    )
+
     return jsonify({
         "status": "ok",
 
@@ -1719,8 +2068,14 @@ def detect():
         "estimated_weight_g":
             estimated_weight_g,
 
+        "volume_3d":
+            vol_3d,
+
         "main_dish":
             main_dish,
+
+        "community_match":
+            community_match,
 
         "ingredients":
             ingredients,
@@ -1771,7 +2126,11 @@ def scan_medical_endpoint():
                 "message": f"Anh ho so y te khong hop le: {e}"
             }), 400
     elif not sample_type:
-        sample_type = "blood_test"
+        # Truoc day tu tra ve phieu xet nghiem MAU nhu the la ket qua that.
+        return jsonify({
+            "status": "error",
+            "message": "Chưa có ảnh phiếu xét nghiệm"
+        }), 400
 
     client = get_gemini_client() if GEMINI_API_KEYS else None
     result = health_rules.scan_medical_document(
@@ -1837,6 +2196,8 @@ _USER_SCOPED_PREFIXES = (
     "/api/health/",
     "/api/report/weekly/",
     "/api/weight/",
+    "/api/exercise/",
+    "/api/export/meals-csv/",
 )
 
 
@@ -1848,12 +2209,16 @@ def require_auth():
 
     path = request.path
 
-    # /api/meals/parse-text, /api/health/scan-medical va /api/meal-plan/weekly
-    # trung tien to nhung KHONG phai API theo user_key -> kiem tra token chung.
+    # Cac API khong theo user_key tren duong dan nhung dung ho so suc khoe /
+    # goi Gemini -> bat buoc dang nhap (truoc day compare/menu/fridge nhan
+    # user_key tu client nen ai cung doc duoc ho so nguoi khac).
     if path in (
         "/api/meals/parse-text",
         "/api/health/scan-medical",
         "/api/meal-plan/weekly",
+        "/api/foods/compare",
+        "/api/menu/analyze",
+        "/api/fridge/suggest",
     ):
         if not _bearer_uid():
             return jsonify({
@@ -2087,7 +2452,6 @@ def weekly_meal_plan_endpoint():
 @app.route("/api/report/weekly/<user_key>", methods=["GET"])
 def weekly_report_endpoint(user_key):
     """Tong hop bao cao dinh duong & y te 7 ngay gan nhat cho nguoi dung."""
-    from datetime import datetime, timedelta, timezone
     user_key = _bearer_uid() or user_key
 
     try:
@@ -2140,7 +2504,7 @@ def weekly_report_endpoint(user_key):
         p = number_or_zero(m.get("protein_g"))
         f = number_or_zero(m.get("fat_g"))
         cb = number_or_zero(m.get("carbs_g"))
-        raw_dt = str(m.get("created_at") or "")[:10]
+        raw_dt = local_day(m.get("created_at"))
         if raw_dt:
             by_day[raw_dt] = by_day.get(raw_dt, 0.0) + c
         total_cal += c
@@ -2188,7 +2552,7 @@ def weekly_report_endpoint(user_key):
         "status": "ok",
         "report": {
             "display_name": display_name,
-            "generated_at": now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "generated_at": now_utc.astimezone(VN_TZ).strftime("%d/%m/%Y %H:%M"),
             "daily_goal": round(daily_goal),
             "logged_days": logged_days,
             "total_meals_logged": len(meals),
@@ -2212,7 +2576,6 @@ def weekly_report_endpoint(user_key):
 @app.route("/api/weight/<user_key>", methods=["GET"])
 def get_weight_endpoint(user_key):
     """Lay lich su can nang va du bao xu huong 30 ngay."""
-    from datetime import datetime, timedelta, timezone
     user_key = _bearer_uid() or user_key
 
     try:
@@ -2254,7 +2617,7 @@ def get_weight_endpoint(user_key):
     for m in meals:
         if not isinstance(m, dict):
             continue
-        dt = str(m.get("created_at") or "")[:10]
+        dt = local_day(m.get("created_at"))
         if dt:
             by_day[dt] = by_day.get(dt, 0.0) + number_or_zero(m.get("calories"))
 
@@ -2318,47 +2681,9 @@ def ai_metrics_endpoint():
 # CHAT (tro ly AI ho tro nguoi dung - nut tron noi trong app)
 # ============================================================
 
-@app.route(
-    "/chat",
-    methods=["POST"]
-)
-def chat():
-    if not GEMINI_API_KEYS:
-        return jsonify({
-            "status": "error",
-            "message":
-                "Server chua cau hinh GEMINI_API_KEY"
-        }), 500
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-    user_message = str(
-        data.get(
-            "message",
-            ""
-        )
-    ).strip()
-
-    if not user_message:
-        return jsonify({
-            "status": "error",
-            "message":
-                "Thieu 'message'"
-        }), 400
-
-    history = data.get(
-        "history"
-    ) or []
-
-    scan_context = data.get(
-        "scan_context"
-    )
-
-    user_key = _current_user_key()
-
-    # Gom ngu canh: ket qua scan gan nhat + ho so nguoi dung (neu co)
+def _chat_context_parts(user_key, scan_context):
+    """Gom ngu canh cho chat: ket qua scan gan nhat + ho so + ho so y te.
+    Dung chung cho /chat va /api/chat/agent."""
     context_parts = []
 
     if scan_context:
@@ -2422,6 +2747,51 @@ def chat():
             context_parts.append("Hồ sơ y tế cá nhân: " + "; ".join(hp_bits) + ".")
     except Exception:
         pass
+
+    return context_parts
+
+
+@app.route(
+    "/chat",
+    methods=["POST"]
+)
+def chat():
+    if not GEMINI_API_KEYS:
+        return jsonify({
+            "status": "error",
+            "message":
+                "Server chua cau hinh GEMINI_API_KEY"
+        }), 500
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    user_message = str(
+        data.get(
+            "message",
+            ""
+        )
+    ).strip()
+
+    if not user_message:
+        return jsonify({
+            "status": "error",
+            "message":
+                "Thieu 'message'"
+        }), 400
+
+    history = data.get(
+        "history"
+    ) or []
+
+    scan_context = data.get(
+        "scan_context"
+    )
+
+    user_key = _current_user_key()
+
+    context_parts = _chat_context_parts(user_key, scan_context)
 
     context_text = (
         "\nNGU CANH:\n" + "\n".join(context_parts) + "\n"
@@ -2558,10 +2928,23 @@ def get_exercise_endpoint(user_key):
 def log_exercise_endpoint(user_key):
     user_key = _bearer_uid() or user_key
     payload = request.get_json(silent=True) or {}
-    act_name = str(payload.get("activity_name") or "Đi bộ nhanh").strip()
+    act_name = str(payload.get("activity_name") or "Đi bộ").strip()
     burned = number_or_zero(payload.get("burned_kcal"))
-    mins = int(number_or_zero(payload.get("minutes")) or 30)
-    res = active_learning.log_exercise(user_key, act_name, burned, mins)
+    mins = int(number_or_zero(payload.get("minutes")) or 1)
+    dist_km = float(number_or_zero(payload.get("distance_km")))
+    steps = int(number_or_zero(payload.get("steps")))
+    pace = str(payload.get("pace") or "").strip()
+    dur_sec = int(number_or_zero(payload.get("duration_sec")))
+    res = active_learning.log_exercise(
+        user_key=user_key,
+        activity_name=act_name,
+        burned_kcal=burned,
+        minutes=mins,
+        distance_km=dist_km,
+        steps=steps,
+        pace=pace,
+        duration_sec=dur_sec,
+    )
     return jsonify({"status": "ok", **res})
 
 
@@ -2602,7 +2985,7 @@ def foods_catalog_endpoint():
 def foods_compare_endpoint():
     """So sanh truc dien 2 mon an theo dinh duong & benh ly ca nhan."""
     payload = request.get_json(silent=True) or {}
-    user_key = _bearer_uid() or str(payload.get("user_key") or DEFAULT_USER_KEY)
+    user_key = _current_user_key()
     food_a_id = int(payload.get("food_a_id") or 0)
     food_b_id = int(payload.get("food_b_id") or 1)
 
@@ -2645,9 +3028,9 @@ def export_meals_csv_endpoint(user_key):
     for r in rows:
         if not isinstance(r, dict):
             continue
-        raw_dt = str(r.get("created_at") or "")
-        date_part = raw_dt[:10] if len(raw_dt) >= 10 else "Hôm nay"
-        time_part = raw_dt[11:16] if len(raw_dt) >= 16 else "12:00"
+        local_dt = local_datetime(r.get("created_at"))
+        date_part = local_dt.strftime("%Y-%m-%d") if local_dt else ""
+        time_part = local_dt.strftime("%H:%M") if local_dt else ""
         meal_type = str(r.get("meal_type") or "Bữa chính").replace(",", " ")
         name = str(r.get("food_name") or r.get("name") or "Món ăn").replace(",", " - ").replace('"', "'")
         portion = int(number_or_zero(r.get("portion_g")) or 250)
@@ -2670,6 +3053,191 @@ def export_meals_csv_endpoint(user_key):
     })
 
 
+@app.route("/api/menu/analyze", methods=["POST"])
+def analyze_menu_endpoint():
+    """Quet anh Menu quan an hoac danh sach mon de goi y Top 3 mon nen goi & mon can tranh."""
+    payload = request.get_json(silent=True) or {}
+    user_key = _current_user_key()
+    sample_type = str(payload.get("sample_type") or request.form.get("sample_type") or "com_van_phong")
+    menu_text = str(payload.get("menu_text") or request.form.get("menu_text") or "").strip()
+    daily_goal = number_or_zero(payload.get("daily_goal") or request.form.get("daily_goal")) or 2000.0
+
+    # Neu nguoi dung chup anh to Menu va co Gemini Vision -> trich xuat ten mon tren menu
+    gclient = get_gemini_client()
+    if "image" in request.files and gclient is not None:
+        try:
+            f = request.files["image"]
+            img_bytes = jpeg_for_gemini(f.read())
+            if img_bytes:
+                resp = gclient.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=[
+                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                        "Đọc ảnh thực đơn (menu) này và liệt kê tối đa 8 tên món ăn bằng tiếng Việt, mỗi món 1 dòng, không đánh số.",
+                    ],
+                )
+                extracted = (resp.text or "").strip()
+                if extracted:
+                    menu_text = extracted
+        except Exception:
+            pass
+
+    hp = health_rules.load_profile(user_key)
+    conds = hp.get("conditions", []) if isinstance(hp, dict) else []
+    alls = hp.get("allergies", []) if isinstance(hp, dict) else []
+
+    res = active_learning.analyze_restaurant_menu(
+        menu_text=menu_text,
+        sample_type=sample_type,
+        daily_goal=daily_goal,
+        user_conditions=conds,
+        user_allergies=alls,
+    )
+    return jsonify({"status": "ok", **res})
+
+
+@app.route("/api/fridge/suggest", methods=["POST"])
+def fridge_suggest_endpoint():
+    """Goi y 3 mon Viet de nau tu nguyen lieu trong tu lanh + loc benh ly/di ung."""
+    payload = request.get_json(silent=True) or {}
+    user_key = _current_user_key()
+    daily_goal = number_or_zero(payload.get("daily_goal") or request.form.get("daily_goal")) or 2000.0
+    raw_ings = payload.get("ingredients") or request.form.get("ingredients")
+    ingredients: list[str] = []
+    if isinstance(raw_ings, list):
+        ingredients = [str(x).strip() for x in raw_ings if str(x).strip()]
+    elif isinstance(raw_ings, str) and raw_ings.strip():
+        ingredients = [x.strip() for x in raw_ings.split(",") if x.strip()]
+
+    # Neu nguoi dung chup anh tu lanh va co Gemini Vision -> nhan dien nguyen lieu
+    gclient = get_gemini_client()
+    if "image" in request.files and gclient is not None:
+        try:
+            f = request.files["image"]
+            img_bytes = jpeg_for_gemini(f.read())
+            if img_bytes:
+                resp = gclient.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=[
+                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                        "Liệt kê các nguyên liệu thực phẩm nhìn thấy trong ảnh này bằng tiếng Việt, cách nhau bởi dấu phẩy (ngắn gọn).",
+                    ],
+                )
+                extracted = (resp.text or "").strip()
+                if extracted:
+                    ingredients.extend([x.strip() for x in extracted.split(",") if x.strip()])
+        except Exception:
+            pass
+
+    hp = health_rules.load_profile(user_key)
+    conds = hp.get("conditions", []) if isinstance(hp, dict) else []
+    alls = hp.get("allergies", []) if isinstance(hp, dict) else []
+
+    res = active_learning.suggest_fridge_recipes(
+        ingredients=ingredients,
+        daily_goal=daily_goal,
+        user_conditions=conds,
+        user_allergies=alls,
+    )
+    return jsonify({"status": "ok", **res})
+
+
+
+
+# ============================================================
+# CONG DONG DAY AI MON MOI (CLIP + pgvector) - xem community_api.py
+# ============================================================
+
+community_api.init(app, supabase, _bearer_uid)
+recipes_api.init(app, supabase, _bearer_uid)   # cong thuc cong dong
+
+
+# ============================================================
+# MAM COM GIA DINH (tach mon bang Gemini, chia phan) - xem family_api.py
+# ============================================================
+
+def _gemini_call(contents, config=None):
+    """Goi Gemini 1 lan voi `contents` bat ky, tra ve text hoac None.
+    Xoay key + thu lai khi qua tai (dung chung cho mam com gia dinh va chat agent)."""
+    if not GEMINI_API_KEYS:
+        return None
+
+    keys_tried = 0
+    max_keys = min(len(GEMINI_API_KEYS), 2)
+    models_to_try = ["gemini-2.5-flash"]
+    if GEMINI_MODEL_NAME and GEMINI_MODEL_NAME not in models_to_try:
+        models_to_try.append(GEMINI_MODEL_NAME)
+
+    while keys_tried < max_keys:
+        client = get_gemini_client()
+
+        if client is None:
+            break
+
+        for candidate_model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=candidate_model,
+                    contents=contents,
+                    config=config or {},
+                )
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "NOT_FOUND" in err_str or "404" in err_str:
+                    continue
+                if _is_temporary_error(err_str):
+                    time.sleep(0.4)
+                print(f"[gemini] loi: {e}")
+                break
+
+        keys_tried += 1
+
+        if not switch_gemini_key():
+            break
+
+    return None
+
+
+def _ask_gemini_with_image(image_bytes, prompt):
+    """Hoi Gemini voi 1 anh JPEG, tra ve text (JSON) hoac None."""
+    return _gemini_call(
+        [types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
+        {"response_mime_type": "application/json"},
+    )
+
+
+def _ask_gemini_chat(contents, system_text):
+    """Chat nhieu luot voi system prompt, tra ve JSON text hoac None."""
+    return _gemini_call(
+        contents,
+        {"system_instruction": system_text,
+         "response_mime_type": "application/json"},
+    )
+
+
+def _daily_goal_of(user_key):
+    """Muc tieu kcal/ngay tu ho so (mac dinh 2000)."""
+    try:
+        rows = (
+            supabase.table("profiles").select("daily_goal")
+            .eq("user_key", user_key).limit(1).execute()
+        ).data
+        return number_or_zero(rows[0].get("daily_goal")) or 2000 if rows else 2000
+    except Exception:
+        return 2000
+
+
+def _family_warnings(user_key, dish_names, nutrition):
+    """Canh bao suc khoe (di ung / benh ly) cho phan an cua nguoi dang dang nhap."""
+    profile = health_rules.load_profile(user_key)
+    return health_rules.check_warnings(profile, dish_names, [], nutrition)
+
+
+family_api.init(app, supabase, _bearer_uid, _ask_gemini_with_image, _family_warnings)
+chat_agent_api.init(app, supabase, _bearer_uid, _ask_gemini_chat,
+                     _chat_context_parts, _daily_goal_of)
+
 
 # ============================================================
 # RUN
@@ -2681,4 +3249,4 @@ if __name__ == "__main__":
         use_reloader=False,
         host="0.0.0.0",
         port=int(os.environ.get("PORT", "5000"))
-    )
+    )

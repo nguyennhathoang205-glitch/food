@@ -438,7 +438,6 @@ Future<bool> showHealthProfileDialog(
 
   final allergies = (profile['allergies'] ?? []).toSet();
   final conditions = (profile['conditions'] ?? []).toSet();
-  final medications = (profile['medications'] ?? []).toSet();
   var saved = false;
 
   await showDialog<void>(
@@ -446,7 +445,6 @@ Future<bool> showHealthProfileDialog(
     builder: (ctx) {
       final allergyCtrl = TextEditingController();
       final conditionCtrl = TextEditingController();
-      final medicationCtrl = TextEditingController();
 
       return StatefulBuilder(
         builder: (ctx, setLocal) {
@@ -529,7 +527,7 @@ Future<bool> showHealthProfileDialog(
           }
 
           return AlertDialog(
-            title: const Text('Hồ sơ sức khỏe & Đơn thuốc'),
+            title: const Text('Hồ sơ sức khỏe (Dị ứng & Bệnh lý)'),
             content: SizedBox(
               width: 440,
               child: SingleChildScrollView(
@@ -552,15 +550,6 @@ Future<bool> showHealthProfileDialog(
                       conditions,
                       conditionCtrl,
                       'Thêm bệnh khác',
-                    ),
-                    const SizedBox(height: 18),
-                    section(
-                      'Thuốc đang dùng (Cảnh báo tương tác)',
-                      Icons.medication_rounded,
-                      kMedicationOptions,
-                      medications,
-                      medicationCtrl,
-                      'Nhập tên thuốc (vd: Atorvastatin 10mg, Losartan)',
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -586,7 +575,6 @@ Future<bool> showHealthProfileDialog(
                       body: jsonEncode({
                         'allergies': allergies.toList(),
                         'conditions': conditions.toList(),
-                        'medications': medications.toList(),
                       }),
                     );
                     saved = true;
@@ -737,10 +725,6 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
         ...(current['conditions'] ?? []),
         ...((_record!['detected_conditions'] as List?) ?? []).map((e) => '$e'),
       };
-      final medications = <String>{
-        ...(current['medications'] ?? []),
-        ...((_record!['detected_medications'] as List?) ?? []).map((e) => '$e'),
-      };
 
       await http.put(
         Uri.parse('${widget.baseUrl}/api/health/${widget.userKey}'),
@@ -748,7 +732,6 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
         body: jsonEncode({
           'allergies': allergies.toList(),
           'conditions': conditions.toList(),
-          'medications': medications.toList(),
         }),
       );
       widget.onSynced();
@@ -756,7 +739,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Đã đồng bộ bệnh lý & đơn thuốc vào Hồ sơ sức khỏe!',
+              'Đã đồng bộ bệnh lý từ phiếu xét nghiệm vào Hồ sơ sức khỏe!',
             ),
             backgroundColor: _primary,
           ),
@@ -776,9 +759,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
   Widget build(BuildContext context) {
     final indicators = (_record?['lab_indicators'] as List?) ?? [];
     final conds = (_record?['detected_conditions'] as List?) ?? [];
-    final meds = (_record?['detected_medications'] as List?) ?? [];
     final advice = (_record?['dietary_advice'] as List?) ?? [];
-    final drugNotes = (_record?['drug_food_notes'] as List?) ?? [];
 
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.85,
@@ -804,7 +785,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Quét Đơn thuốc & Xét nghiệm (AI OCR)',
+                      'Quét Phiếu Xét Nghiệm Máu (AI OCR)',
                       style: TextStyle(
                         color: _ink,
                         fontWeight: FontWeight.w900,
@@ -812,7 +793,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                       ),
                     ),
                     Text(
-                      'Trích xuất chỉ số máu & bệnh lý từ phiếu xét nghiệm',
+                      'Trích xuất chỉ số sinh hóa & bệnh lý từ phiếu xét nghiệm',
                       style: TextStyle(color: _muted, fontSize: 11.5),
                     ),
                   ],
@@ -846,7 +827,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Hoặc thử nhanh hồ sơ lâm sàng mẫu:',
+            'Hoặc thử nhanh phiếu xét nghiệm mẫu:',
             style: TextStyle(
               fontSize: 11.5,
               color: _muted,
@@ -870,20 +851,6 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                 ),
                 onPressed: _loading ? null : () => _scanWithSample('blood_test'),
               ),
-              ActionChip(
-                avatar: const Icon(
-                  Icons.medication_liquid_rounded,
-                  size: 16,
-                  color: Color(0xFF2563EB),
-                ),
-                label: const Text(
-                  'Mẫu Đơn thuốc Tim mạch - Dạ dày',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-                ),
-                onPressed: _loading
-                    ? null
-                    : () => _scanWithSample('prescription'),
-              ),
             ],
           ),
           if (_imageBytes != null) ...[
@@ -906,7 +873,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                   CircularProgressIndicator(color: _primary),
                   SizedBox(height: 10),
                   Text(
-                    'AI đang đọc chỉ số xét nghiệm và đơn thuốc...',
+                    'AI đang đọc chỉ số xét nghiệm sinh hóa...',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -942,7 +909,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                     '${_record!['summary'] ?? ''}',
                     style: const TextStyle(color: _muted, fontSize: 12.5),
                   ),
-                  if (conds.isNotEmpty || meds.isNotEmpty) ...[
+                  if (conds.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 6,
@@ -957,23 +924,6 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                             ),
                             label: Text(
                               '$c',
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
-                        ...meds.map(
-                          (m) => Chip(
-                            avatar: const Icon(
-                              Icons.medication_rounded,
-                              size: 15,
-                              color: Color(0xFF2563EB),
-                            ),
-                            label: Text(
-                              '$m',
                               style: const TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
@@ -1061,35 +1011,6 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                 );
               }),
             ],
-            if (drugNotes.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text(
-                'CẢNH BÁO TƯƠNG TÁC THUỐC – THỰC PHẨM',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFFB45309),
-                ),
-              ),
-              const SizedBox(height: 6),
-              ...drugNotes.map(
-                (n) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('💊 ', style: TextStyle(fontSize: 13)),
-                      Expanded(
-                        child: Text(
-                          '$n',
-                          style: const TextStyle(fontSize: 12, color: _ink),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
             if (advice.isNotEmpty) ...[
               const SizedBox(height: 12),
               const Text(
@@ -1135,7 +1056,7 @@ class _MedicalOcrSheetBodyState extends State<_MedicalOcrSheetBody> {
                 label: Text(
                   _syncing
                       ? 'Đang đồng bộ...'
-                      : 'Đồng bộ Bệnh lý & Đơn thuốc vào Hồ sơ',
+                      : 'Đồng bộ Bệnh lý vào Hồ sơ sức khỏe',
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
@@ -1170,7 +1091,6 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
   Map<String, List<String>> profile = {
     'allergies': [],
     'conditions': [],
-    'medications': [],
   };
 
   @override
@@ -1217,8 +1137,7 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
   Widget build(BuildContext context) {
     final a = profile['allergies'] ?? [];
     final c = profile['conditions'] ?? [];
-    final m = profile['medications'] ?? [];
-    final empty = a.isEmpty && c.isEmpty && m.isEmpty;
+    final empty = a.isEmpty && c.isEmpty;
 
     return InkWell(
       borderRadius: BorderRadius.circular(24),
@@ -1235,7 +1154,7 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Hồ sơ sức khỏe & Đơn thuốc',
+                    'Hồ sơ sức khỏe (Dị ứng & Bệnh lý)',
                     style: TextStyle(
                       color: _ink,
                       fontWeight: FontWeight.w900,
@@ -1256,7 +1175,7 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
             const SizedBox(height: 10),
             if (empty)
               const Text(
-                'Khai báo dị ứng, bệnh lý và đơn thuốc đang dùng để AI cảnh báo tương tác ngay khi bạn quét món.',
+                'Khai báo dị ứng và bệnh lý nền để AI cảnh báo ngay khi bạn quét món ăn hoặc lập thực đơn.',
                 style: TextStyle(color: _muted, fontSize: 12),
               )
             else
@@ -1286,17 +1205,6 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
-                  ...m.map(
-                    (e) => Chip(
-                      avatar: const Icon(
-                        Icons.medication_rounded,
-                        size: 16,
-                        color: Color(0xFF2563EB),
-                      ),
-                      label: Text(e),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
                 ],
               ),
             const SizedBox(height: 12),
@@ -1313,7 +1221,7 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
                 onPressed: _openMedicalOcr,
                 icon: const Icon(Icons.document_scanner_rounded, size: 18),
                 label: const Text(
-                  'Quét Đơn thuốc / Phiếu xét nghiệm máu (AI OCR)',
+                  'Quét Phiếu Xét Nghiệm Máu (AI OCR)',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                 ),
               ),

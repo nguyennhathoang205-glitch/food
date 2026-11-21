@@ -28,7 +28,7 @@ class FeedbackDialog extends StatefulWidget {
     this.baseUrl,
   });
 
-  static Future<void> show(
+  static Future<String?> show(
     BuildContext context, {
     required String userKey,
     required String predictedName,
@@ -38,7 +38,7 @@ class FeedbackDialog extends StatefulWidget {
     Map<String, dynamic>? boundingBox,
     String? baseUrl,
   }) {
-    return showDialog(
+    return showDialog<String>(
       context: context,
       builder: (ctx) => FeedbackDialog(
         userKey: userKey,
@@ -97,7 +97,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
 
     if (mounted) {
       setState(() => _isSubmitting = false);
-      Navigator.pop(context);
+      Navigator.pop(context, correctName);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -106,8 +106,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           content: Text(
             ok
-                ? 'Cảm ơn bạn! Dữ liệu & ảnh đã được lưu để huấn luyện lại model.'
-                : 'Đã ghi nhận phản hồi của bạn!',
+                ? 'Đã cập nhật món "$correctName" trên màn hình & lưu dữ liệu huấn luyện AI!'
+                : 'Đã cập nhật tên món thành "$correctName"!',
             style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, color: Colors.white),
           ),
         ),
@@ -148,107 +148,110 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
           ),
         ],
       ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.imageBytes != null) ...[
-              Center(
-                child: ClipRRect(
+      content: SizedBox(
+        width: 340,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.imageBytes != null) ...[
+                ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(
                     widget.imageBytes!,
                     height: 120,
-                    width: double.infinity,
+                    width: 340,
                     fit: BoxFit.cover,
                   ),
                 ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                'AI nhận diện:',
+                style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
               ),
-              const SizedBox(height: 12),
-            ],
-            Text(
-              'AI nhận diện:',
-              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.psychology, color: Color(0xFF64748B), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.predictedName,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1E293B),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.psychology, color: Color(0xFF64748B), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.predictedName,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
                     ),
-                  ),
-                  if (widget.confidence != null) ...[
-                    const Spacer(),
-                    Text(
-                      '${(widget.confidence! * 100).toInt()}%',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade500),
-                    ),
+                    if (widget.confidence != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(widget.confidence! * 100).toInt()}%',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade500),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Tên món chính xác thực tế:',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF334155),
+              const SizedBox(height: 14),
+              Text(
+                'Tên món chính xác thực tế:',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF334155),
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _correctNameCtrl,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Nhập tên món đúng...',
-                hintStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade400),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _correctNameCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Nhập tên món đúng...',
+                  hintStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade400),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Hoặc chọn nhanh:',
-              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey.shade500),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _commonDishes.take(5).map((d) {
-                return InkWell(
-                  onTap: () => setState(() => _correctNameCtrl.text = d),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 10),
+              Text(
+                'Hoặc chọn nhanh:',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey.shade500),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _commonDishes.take(5).map((d) {
+                  return InkWell(
+                    onTap: () => setState(() => _correctNameCtrl.text = d),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        d,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF334155)),
+                      ),
                     ),
-                    child: Text(
-                      d,
-                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF334155)),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [

@@ -12,36 +12,51 @@ class OnDeviceDetection {
 }
 
 /// Chay model YOLO (da xuat sang TFLite) truc tiep tren iOS/Android.
-/// File model: assets/models/food_detector.tflite (duoc Codemagic xuat tu
-/// backend/models/food_detector_yolo26.pt). Neu thieu file -> tra ve [].
+/// Ho tro dong thoi ca 2 model:
+/// - assets/models/food_detector.tflite (68 mon an Viet, classId 0..67)
+/// - assets/models/fruit_detector.tflite (20 loai trai cay, classId 1000..1019)
 class OnDeviceDetector {
-  static const _modelAsset = 'assets/models/food_detector.tflite';
+  static const _foodModelAsset = 'assets/models/food_detector.tflite';
+  static const _fruitModelAsset = 'assets/models/fruit_detector.tflite';
+  static const _fruitIdOffset = 1000;
   static const _scoreThreshold = 0.40;
   static const _iouThreshold = 0.50;
 
-  static Interpreter? _interpreter;
-  static bool _failed = false;
+  static Interpreter? _foodInterpreter;
+  static bool _foodFailed = false;
+
+  static Interpreter? _fruitInterpreter;
+  static bool _fruitFailed = false;
 
   static bool get isSupported => true;
 
-  static Future<Interpreter?> _load() async {
-    if (_interpreter != null) return _interpreter;
-    if (_failed) return null;
+  static Future<Interpreter?> _loadFood() async {
+    if (_foodInterpreter != null) return _foodInterpreter;
+    if (_foodFailed) return null;
     try {
-      _interpreter = await Interpreter.fromAsset(_modelAsset);
+      _foodInterpreter = await Interpreter.fromAsset(_foodModelAsset);
     } catch (_) {
-      _failed = true;
+      _foodFailed = true;
     }
-    return _interpreter;
+    return _foodInterpreter;
   }
 
-  static Future<List<OnDeviceDetection>> detect(Uint8List imageBytes) async {
-    final interp = await _load();
-    if (interp == null) return const [];
+  static Future<Interpreter?> _loadFruit() async {
+    if (_fruitInterpreter != null) return _fruitInterpreter;
+    if (_fruitFailed) return null;
+    try {
+      _fruitInterpreter = await Interpreter.fromAsset(_fruitModelAsset);
+    } catch (_) {
+      _fruitFailed = true;
+    }
+    return _fruitInterpreter;
+  }
 
-    final decoded = img.decodeImage(imageBytes);
-    if (decoded == null) return const [];
-
+  static List<OnDeviceDetection> _runSingleModel(
+    Interpreter interp,
+    img.Image decoded, {
+    required int idOffset,
+  }) {
     final inShape = interp.getInputTensor(0).shape; // [1, H, W, 3]
     final h = inShape[1];
     final w = inShape[2];
@@ -85,17 +100,54 @@ class OnDeviceDetector {
       }
       if (best < 0 || bestScore < _scoreThreshold) continue;
       final cx = at(0, n), cy = at(1, n), bw = at(2, n), bh = at(3, n);
-      cands.add(_Cand(best, bestScore, cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2));
+      cands.add(
+        _Cand(
+          best + idOffset,
+          bestScore,
+          cx - bw / 2,
+          cy - bh / 2,
+          cx + bw / 2,
+          cy + bh / 2,
+        ),
+      );
     }
 
     cands.sort((a, b) => b.score.compareTo(a.score));
     final kept = <_Cand>[];
     for (final c in cands) {
-      if (kept.every((k) => k.classId != c.classId || _iou(k, c) < _iouThreshold)) {
+      if (kept.every(
+        (k) => k.classId != c.classId || _iou(k, c) < _iouThreshold,
+      )) {
         kept.add(c);
       }
     }
     return kept.map((k) => OnDeviceDetection(k.classId, k.score)).toList();
+  }
+
+  static Future<List<OnDeviceDetection>> detect(Uint8List imageBytes) async {
+    final foodInterp = await _loadFood();
+    final fruitInterp = await _loadFruit();
+    if (foodInterp == null && fruitInterp == null) return const [];
+
+    final decoded = img.decodeImage(imageBytes);
+    if (decoded == null) return const [];
+
+    final all = <OnDeviceDetection>[];
+    if (foodInterp != null) {
+      try {
+        all.addAll(_runSingleModel(foodInterp, decoded, idOffset: 0));
+      } catch (_) {}
+    }
+    if (fruitInterp != null) {
+      try {
+        all.addAll(
+          _runSingleModel(fruitInterp, decoded, idOffset: _fruitIdOffset),
+        );
+      } catch (_) {}
+    }
+
+    all.sort((a, b) => b.score.compareTo(a.score));
+    return all;
   }
 
   static double _iou(_Cand a, _Cand b) {

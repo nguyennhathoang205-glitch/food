@@ -17,6 +17,7 @@ import 'features/scan/scan_screen.dart';
 import 'features/stats/statistics_screen.dart';
 import 'features/journal/journal_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'widgets/pro_smart_sheets.dart' show SaltyMealHydrationHelper;
 
 void main() {
   runApp(const FoodScanApp());
@@ -433,7 +434,21 @@ class _FoodScanShellState extends State<FoodScanShell> {
 
   Future<void> addMeal(MealEntry meal) async {
     try {
-      final saved = await ApiService.addMeal(meal);
+      final rawSaved = await ApiService.addMeal(meal);
+      final saved = (rawSaved.thumb == null && meal.thumb != null)
+          ? MealEntry(
+              id: rawSaved.id,
+              name: rawSaved.name,
+              mealType: rawSaved.mealType,
+              time: rawSaved.time,
+              portionG: rawSaved.portionG,
+              calories: rawSaved.calories,
+              proteinG: rawSaved.proteinG,
+              fatG: rawSaved.fatG,
+              carbsG: rawSaved.carbsG,
+              thumb: meal.thumb,
+            )
+          : rawSaved;
 
       if (!mounted) {
         return;
@@ -443,11 +458,15 @@ class _FoodScanShellState extends State<FoodScanShell> {
         mealEntries.insert(0, saved);
       });
 
+      final waterTip = SaltyMealHydrationHelper.isSaltyOrSavory(saved.name)
+          ? ' · 💧 Món đậm vị: nhớ uống bù ~250ml nước!'
+          : '';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: accent,
-          content: Text('Đã thêm ${saved.name} vào ${saved.mealType}'),
+          content: Text('Đã thêm ${saved.name} vào ${saved.mealType}$waterTip'),
         ),
       );
       syncOfflineMeals();
@@ -540,7 +559,21 @@ class _FoodScanShellState extends State<FoodScanShell> {
     }
 
     try {
-      final saved = await ApiService.updateMeal(meal);
+      final rawSaved = await ApiService.updateMeal(meal);
+      final saved = (rawSaved.thumb == null && meal.thumb != null)
+          ? MealEntry(
+              id: rawSaved.id,
+              name: rawSaved.name,
+              mealType: rawSaved.mealType,
+              time: rawSaved.time,
+              portionG: rawSaved.portionG,
+              calories: rawSaved.calories,
+              proteinG: rawSaved.proteinG,
+              fatG: rawSaved.fatG,
+              carbsG: rawSaved.carbsG,
+              thumb: meal.thumb,
+            )
+          : rawSaved;
 
       if (!mounted) {
         return;
@@ -654,9 +687,18 @@ class _FoodScanShellState extends State<FoodScanShell> {
             ),
       ),
 
-      ScanScreen(onAddMeal: addMeal, onScanResult: setLastScanContext),
+      ScanScreen(
+        onAddMeal: addMeal,
+        dailyGoal: profile.dailyGoal,
+        onScanResult: setLastScanContext,
+      ),
 
-      StatisticsScreen(entries: mealEntries, profile: profile),
+      StatisticsScreen(
+        entries: mealEntries,
+        profile: profile,
+        onAddMeal: addMeal,
+        onSaveProfile: saveProfile,
+      ),
 
       JournalScreen(
         entries: mealEntries,
@@ -680,6 +722,7 @@ class _FoodScanShellState extends State<FoodScanShell> {
           FloatingHelpButton(
             backendBaseUrl: backendBaseUrl,
             scanContext: lastScanContext,
+            onMealsChanged: refreshData,
           ),
         ],
       ),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/day_stats.dart';
@@ -5,6 +7,15 @@ import '../../core/meal_slot.dart';
 import '../../models/models.dart';
 import '../../widgets/empty_state.dart';
 import '../stats/statistics_screen.dart' show CsvExportDialog;
+
+Uint8List? _decodeMealThumb(String? thumb) {
+  if (thumb == null || thumb.isEmpty) return null;
+  try {
+    return base64Decode(thumb);
+  } catch (_) {
+    return null;
+  }
+}
 
 // ============================================================
 // JOURNAL SCREEN
@@ -32,8 +43,16 @@ class _JournalScreenState extends State<JournalScreen> {
   // Truoc day Nhat ky hien TAT CA bua an moi ngay gop lai nen trong nhu
   // "hom nay" -> lech voi Trang chu. Gio xem theo tung ngay.
   DateTime selectedDay = DayStats.dayOnly(DateTime.now());
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   DateTime get today => DayStats.dayOnly(DateTime.now());
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   void _shiftDay(int delta) {
     final next = selectedDay.add(Duration(days: delta));
@@ -82,6 +101,13 @@ class _JournalScreenState extends State<JournalScreen> {
     final yesterdayEntries = widget.entries
         .where((e) => DayStats.isSameDay(e.time, yesterday))
         .toList();
+    final q = _searchQuery.trim().toLowerCase();
+    final searchResults = q.isEmpty
+        ? const <MealEntry>[]
+        : (widget.entries
+              .where((e) => e.name.toLowerCase().contains(q))
+              .toList()
+            ..sort((a, b) => b.time.compareTo(a.time)));
 
     return SafeArea(
       child: Center(
@@ -174,7 +200,78 @@ class _JournalScreenState extends State<JournalScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                decoration: InputDecoration(
+                  hintText: 'Tìm lịch sử món đã ăn (VD: phở, cơm tấm, bún)...',
+                  hintStyle: const TextStyle(fontSize: 12.5),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
               const SizedBox(height: 14),
+              if (q.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.manage_search_rounded, color: primaryDark),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tìm thấy ${searchResults.length} lần ăn "$_searchQuery" trong toàn bộ lịch sử',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: primaryDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (searchResults.isEmpty)
+                  EmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: 'Không tìm thấy "$_searchQuery"',
+                    subtitle: 'Thử từ khóa khác trong nhật ký ăn uống của bạn.',
+                  )
+                else
+                  MealSection(
+                    title: 'Kết quả tìm kiếm (${searchResults.length} bữa)',
+                    entries: searchResults,
+                    onDelete: widget.onDelete,
+                    onEdit: widget.onEdit,
+                    onReLog: widget.onReLog,
+                  ),
+              ] else ...[
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -236,6 +333,7 @@ class _JournalScreenState extends State<JournalScreen> {
                             proteinG: m.proteinG,
                             fatG: m.fatG,
                             carbsG: m.carbsG,
+                            thumb: m.thumb,
                           ),
                         );
                       }
@@ -274,6 +372,7 @@ class _JournalScreenState extends State<JournalScreen> {
                         onReLog: widget.onReLog,
                       ),
                     ),
+              ],
             ],
           ),
         ),
@@ -318,6 +417,7 @@ class MealSection extends StatelessWidget {
             final newP = meal.proteinG * scale;
             final newF = meal.fatG * scale;
             final newCb = meal.carbsG * scale;
+            final thumbBytes = _decodeMealThumb(meal.thumb);
 
             return Padding(
               padding: EdgeInsets.fromLTRB(
@@ -350,6 +450,18 @@ class MealSection extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (thumbBytes != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.memory(
+                        thumbBytes,
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -434,6 +546,7 @@ class MealSection extends StatelessWidget {
                                   proteinG: newP,
                                   fatG: newF,
                                   carbsG: newCb,
+                                  thumb: meal.thumb,
                                 ),
                               );
                             },
@@ -459,6 +572,7 @@ class MealSection extends StatelessWidget {
                                   proteinG: newP,
                                   fatG: newF,
                                   carbsG: newCb,
+                                  thumb: meal.thumb,
                                 ),
                               );
                             },
@@ -568,6 +682,7 @@ class PremiumMealTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final thumbBytes = _decodeMealThumb(entry.thumb);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(19),
@@ -579,15 +694,26 @@ class PremiumMealTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: primary.withValues(alpha: 0.1),
+            if (thumbBytes != null)
+              ClipRRect(
                 borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  thumbBytes,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.restaurant_rounded, color: primaryDark),
               ),
-              child: const Icon(Icons.restaurant_rounded, color: primaryDark),
-            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

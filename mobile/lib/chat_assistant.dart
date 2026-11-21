@@ -10,7 +10,20 @@ const _accent = Color(0xFF0F172A);
 class ChatMessage {
   final String role; // "user" hoac "assistant"
   final String text;
-  ChatMessage({required this.role, required this.text});
+
+  /// De xuat hanh dong do AI tra ve (ghi mon / xoa mon), cho nguoi dung xac nhan.
+  /// Chi la de xuat: KHONG co gi duoc ghi cho den khi nguoi dung bam xac nhan.
+  final Map<String, dynamic>? pending;
+
+  /// 'open' (cho xac nhan) | 'done' | 'dismissed'
+  String pendingState;
+
+  ChatMessage({
+    required this.role,
+    required this.text,
+    this.pending,
+    this.pendingState = 'open',
+  });
 }
 
 /// Nut tron noi goc duoi man hinh, bam vao mo khung chat tro ly AI.
@@ -22,17 +35,21 @@ class FloatingHelpButton extends StatelessWidget {
   final String backendBaseUrl;
   final Map<String, dynamic>? scanContext;
 
+  /// Goi sau khi chat ghi / xoa mon trong nhat ky (de man hinh khac tai lai).
+  final VoidCallback? onMealsChanged;
+
   const FloatingHelpButton({
     super.key,
     required this.backendBaseUrl,
     this.scanContext,
+    this.onMealsChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      right: 10,
-      bottom: 10,
+      right: 18,
+      bottom: 18,
       child: _PulsingFab(onTap: () => _openChatSheet(context)),
     );
   }
@@ -42,8 +59,11 @@ class FloatingHelpButton extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          ChatSheet(backendBaseUrl: backendBaseUrl, scanContext: scanContext),
+      builder: (context) => ChatSheet(
+        backendBaseUrl: backendBaseUrl,
+        scanContext: scanContext,
+        onMealsChanged: onMealsChanged,
+      ),
     );
   }
 }
@@ -92,8 +112,8 @@ class _PulsingFabState extends State<_PulsingFab>
           customBorder: const CircleBorder(),
           onTap: widget.onTap,
           child: Container(
-            width: 46,
-            height: 46,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const LinearGradient(
@@ -125,8 +145,14 @@ class _PulsingFabState extends State<_PulsingFab>
 class ChatSheet extends StatefulWidget {
   final String backendBaseUrl;
   final Map<String, dynamic>? scanContext;
+  final VoidCallback? onMealsChanged;
 
-  const ChatSheet({super.key, required this.backendBaseUrl, this.scanContext});
+  const ChatSheet({
+    super.key,
+    required this.backendBaseUrl,
+    this.scanContext,
+    this.onMealsChanged,
+  });
 
   @override
   State<ChatSheet> createState() => _ChatSheetState();
@@ -139,10 +165,11 @@ class _ChatSheetState extends State<ChatSheet> {
   bool _isSending = false;
 
   static const List<String> _suggestedQuestions = [
+    'Hôm nay tôi đã ăn bao nhiêu kcal rồi?',
+    'Ghi giúp: sáng nay tôi ăn 2 trứng và 1 ổ bánh mì',
     'Món này có phù hợp để giảm cân không?',
     'Bữa ăn này thiếu chất gì?',
     'Gợi ý món ăn kèm cho cân bằng hơn',
-    'App này hoạt động như thế nào?',
   ];
 
   @override
@@ -176,25 +203,43 @@ class _ChatSheetState extends State<ChatSheet> {
     _scrollToBottom();
 
     try {
-      final uri = Uri.parse('${widget.backendBaseUrl}/chat');
       final history = _messages
+          .where((m) => m.text.isNotEmpty)
           .map((m) => {'role': m.role, 'text': m.text})
           .toList();
+      final body = jsonEncode({
+        'message': text.trim(),
+        'history': history,
+        'scan_context': widget.scanContext,
+      });
+      const headers = {'Content-Type': 'application/json'};
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'message': text.trim(),
-          'history': history,
-          'scan_context': widget.scanContext,
-        }),
+      var response = await http.post(
+        Uri.parse('${widget.backendBaseUrl}/api/chat/agent'),
+        headers: headers,
+        body: body,
       );
+
+      // Server chua co chat agent -> dung /chat cu de khong mat tinh nang.
+      if (response.statusCode == 404) {
+        response = await http.post(
+          Uri.parse('${widget.backendBaseUrl}/chat'),
+          headers: headers,
+          body: body,
+        );
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final pending = data['pending'];
         setState(() {
-          _messages.add(ChatMessage(role: 'assistant', text: data['reply']));
+          _messages.add(
+            ChatMessage(
+              role: 'assistant',
+              text: '${data['reply'] ?? ''}',
+              pending: pending is Map<String, dynamic> ? pending : null,
+            ),
+          );
         });
       } else {
         setState(() {
@@ -219,6 +264,64 @@ class _ChatSheetState extends State<ChatSheet> {
       setState(() => _isSending = false);
       _scrollToBottom();
     }
+  }
+
+  Future<void> _confirmPending(ChatMessage message) async {
+    final pending = message.pending;
+    if (pending == null || message.pendingState != 'open' || _isSending) return;
+
+    final payload = pending['type'] == 'delete_meal'
+        ? {'type': 'delete_meal', 'meal_id': (pending['meal'] as Map?)?['id']}
+        : {
+            'type': 'log_meal',
+            'meal_type': pending['meal_type'],
+            'items': pending['items'],
+          };
+
+    setState(() => _isSending = true);
+    try {
+      final response = await http.post(
+        Uri.parse('${widget.backendBaseUrl}/api/chat/agent/confirm'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+      setState(() {
+        if (response.statusCode == 200) {
+          message.pendingState = 'done';
+          _messages.add(
+            ChatMessage(role: 'assistant', text: '${data['reply'] ?? 'Xong rồi!'}'),
+          );
+        } else {
+          _messages.add(
+            ChatMessage(
+              role: 'assistant',
+              text: '${data['message'] ?? 'Không thực hiện được, thử lại nhé.'}',
+            ),
+          );
+        }
+      });
+
+      if (response.statusCode == 200) widget.onMealsChanged?.call();
+    } catch (_) {
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            role: 'assistant',
+            text: 'Không kết nối được tới server. Kiểm tra lại kết nối nhé.',
+          ),
+        );
+      });
+    } finally {
+      setState(() => _isSending = false);
+      _scrollToBottom();
+    }
+  }
+
+  void _dismissPending(ChatMessage message) {
+    if (message.pendingState != 'open') return;
+    setState(() => message.pendingState = 'dismissed');
   }
 
   void _scrollToBottom() {
@@ -319,7 +422,19 @@ class _ChatSheetState extends State<ChatSheet> {
                   if (index == _messages.length) {
                     return const _TypingBubble();
                   }
-                  return _ChatBubble(message: _messages[index]);
+                  final message = _messages[index];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ChatBubble(message: message),
+                      if (message.pending != null)
+                        _PendingCard(
+                          message: message,
+                          onConfirm: () => _confirmPending(message),
+                          onDismiss: () => _dismissPending(message),
+                        ),
+                    ],
+                  );
                 },
               ),
             ),
@@ -360,7 +475,7 @@ class _ChatSheetState extends State<ChatSheet> {
                       child: TextField(
                         controller: _inputController,
                         decoration: const InputDecoration(
-                          hintText: 'Nhập câu hỏi của bạn...',
+                          hintText: 'Hỏi hoặc ghi món: "trưa nay tôi ăn phở"...',
                           hintStyle: TextStyle(
                             color: Color(0xFF9AA59F),
                             fontSize: 13.5,
@@ -399,6 +514,100 @@ class _ChatSheetState extends State<ChatSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The de xuat "Ghi vao nhat ky" / "Xoa mon" - chi ghi that khi bam xac nhan.
+class _PendingCard extends StatelessWidget {
+  final ChatMessage message;
+  final VoidCallback onConfirm;
+  final VoidCallback onDismiss;
+
+  const _PendingCard({
+    required this.message,
+    required this.onConfirm,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = message.pending!;
+    final isDelete = pending['type'] == 'delete_meal';
+    final state = message.pendingState;
+
+    final lines = <String>[];
+    if (isDelete) {
+      final meal = (pending['meal'] as Map?) ?? const {};
+      lines.add(
+        '${meal['food_name']} · ${(meal['calories'] as num?)?.round() ?? 0} kcal',
+      );
+    } else {
+      for (final item in (pending['items'] as List? ?? [])) {
+        if (item is Map) {
+          lines.add(
+            '${item['name_vi']} · ${item['portion_g']} g · ${(item['calories'] as num?)?.round() ?? 0} kcal',
+          );
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12, right: 24),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDelete ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDelete ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isDelete
+                ? 'Xóa khỏi nhật ký'
+                : 'Ghi vào ${pending['meal_type']} (ước tính)',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: _accent,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final line in lines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text('• $line', style: const TextStyle(fontSize: 13)),
+            ),
+          const SizedBox(height: 8),
+          if (state == 'open')
+            Row(
+              children: [
+                FilledButton(
+                  onPressed: onConfirm,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isDelete
+                        ? const Color(0xFFDC2626)
+                        : _primary,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text(isDelete ? 'Xóa' : 'Ghi vào nhật ký'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(onPressed: onDismiss, child: const Text('Bỏ qua')),
+              ],
+            )
+          else
+            Text(
+              state == 'done'
+                  ? (isDelete ? 'Đã xóa ✓' : 'Đã ghi ✓')
+                  : 'Đã bỏ qua',
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+            ),
+        ],
       ),
     );
   }

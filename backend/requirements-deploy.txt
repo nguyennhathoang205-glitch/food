@@ -11,3 +11,5 @@ numpy
 requests
 PyJWT
 PyYAML
+sentence-transformers
+

@@ -290,7 +290,7 @@ DRUG_FOOD_RULES = [
 
 
 def check_drug_food_interactions(medications, haystack, total=None):
-    """Da TAT canh bao tuong tac thuoc - thuc pham (khong du can cu y khoa chac chan)."""
+    """Da TAT canh bao tuong tac thuoc - thuc pham (khong thuc te trong pham vi app dinh duong)."""
     return []
 
 
@@ -363,10 +363,10 @@ def check_warnings(profile, names, ingredients, total):
     def add(level, msg):
         warnings.append({"level": level, "message": msg})
 
-    if "tiểu đường" in conditions and carbs > 60:
+    if "tiểu đường" in conditions and carbs > 85:
         add("orange",
-            f"Tiểu đường: lượng carb cao ({carbs:.0f}g/phần) - "
-            "dễ làm tăng đường huyết.")
+            f"Tiểu đường: lượng tinh bột khá cao ({carbs:.0f}g/phần) - "
+            "nên ăn rau trước và giảm bớt cơm/bún.")
 
     if any(c in conditions for c in ("mỡ máu", "cholesterol cao",
                                       "huyết áp cao", "béo phì")) and fat > 30:
@@ -443,10 +443,16 @@ def analyze_food_pathology(profile, data):
     # 2. Phan tich 6 nhom benh ly (disease_breakdown)
     breakdown = []
 
-    # Nhóm A: Tăng huyết áp / Tim mạch (Natri & Đồ hộp / Món mặn)
+    # Nhóm A: Tăng huyết áp / Tim mạch (Chỉ cảnh báo khi thực sự mặn: Natri cao, đồ muối chua, mắm, đồ hộp, kho mặn)
     is_user_ha = any("huyết áp" in c for c in user_conds)
     is_canned = _has(["hộp", "lon", "đồ hộp", "đóng hộp", "canfoco", "canned"], haystack)
-    has_salty_kw = _has(CONDITION_KEYWORDS["huyết áp cao"] + ["phở", "bún bò", "hủ tiếu", "mì quảng"], haystack)
+    has_salty_kw = _has(
+        CONDITION_KEYWORDS["huyết áp cao"]
+        + [
+            "bún mắm", "mắm nêm", "mắm tôm", "thịt kho", "cá kho", "cá khô",
+        ],
+        haystack,
+    )
     if sodium >= 800 or (sodium >= 600 and is_user_ha):
         breakdown.append({
             "condition": "Tăng huyết áp",
@@ -460,11 +466,11 @@ def analyze_food_pathology(profile, data):
         detail_msg = (
             f"Lượng muối natri {sodium:.0f}mg ở mức khá cao, người có tiền sử tim mạch hoặc huyết áp cao nên dùng lượng nhỏ."
             if sodium > 0 else
-            "Món có gia vị mặn/nước dùng đậm đà, người cao huyết áp nên hạn chế húp hết nước dùng hoặc chấm thêm nước mắm."
+            "Món có tính chất kho mặn/muối chua hoặc dùng mắm đậm đặc; người cao huyết áp nên hạn chế nước chấm mặn."
         )
         breakdown.append({
             "condition": "Tăng huyết áp",
-            "status": "Cần hạn chế",
+            "status": "Lưu ý lượng mặn",
             "level": "orange",
             "icon": "favorite_rounded",
             "user_matched": is_user_ha,
@@ -477,24 +483,40 @@ def analyze_food_pathology(profile, data):
             "level": "green",
             "icon": "favorite_rounded",
             "user_matched": is_user_ha,
-            "detail": f"Lượng natri {sodium:.0f}mg trong ngưỡng an toàn, ít ảnh hưởng huyết áp." if sodium > 0 else "Món ăn có lượng muối/natri ở ngưỡng vừa phải, phù hợp người kiểm soát huyết áp."
+            "detail": (
+                f"Lượng natri {sodium:.0f}mg trong ngưỡng an toàn, ít ảnh hưởng huyết áp."
+                if sodium > 0 else
+                "Mức gia vị thông thường; người cao huyết áp chỉ cần chấm lượng nước mắm/nước chấm vừa phải."
+            )
         })
 
-    # Nhóm B: Bệnh Gout & Axit Uric (Thịt đỏ, đồ hộp, nội tạng, cá béo/seafood)
+    # Nhóm B: Bệnh Gout & Axit Uric (Chỉ cảnh báo nội tạng, hải sản, thịt bò/đỏ nhiều purine hoặc đạm quá lớn >= 48g)
     is_user_gout = any("gout" in c for c in user_conds)
-    has_purine = _has([
-        "thịt heo", "heo", "thịt lợn", "lợn", "pork", "bò", "beef", "thịt đỏ",
-        "gan", "lòng", "pate", "pa tê", "cá mòi", "cá nục", "cá ngừ",
-        "hải sản", "nội tạng", "tôm", "cua", "ghẹ", "mực", "ốc", "bia"
+    has_high_purine = _has([
+        "gan", "lòng", "tim", "bầu dục", "nội tạng", "pate", "pa tê",
+        "cá mòi", "cá nục", "cá ngừ", "hải sản", "tôm", "cua", "ghẹ",
+        "mực", "ốc", "hàu", "nghêu", "sò", "bia", "thịt chó",
     ], haystack)
-    if has_purine and (is_canned or _has(["thịt", "meat", "bò", "hải sản", "tôm", "cua", "mực", "lòng", "gan", "nội tạng"], haystack)):
+    has_red_meat_purine = _has([
+        "thịt bò", "bò", "beef", "thịt đỏ", "dê", "cừu", "lẩu bò",
+    ], haystack)
+    if has_high_purine or (has_red_meat_purine and is_canned):
         breakdown.append({
             "condition": "Bệnh Gout",
             "status": "Cần hạn chế" if not is_user_gout else "Nguy cơ cao",
             "level": "red" if is_user_gout else "orange",
             "icon": "healing_rounded",
             "user_matched": is_user_gout,
-            "detail": "Chứa thịt đỏ/hải sản/thịt chế biến giàu nhân purine, chuyển hóa thành axit uric có thể kích hoạt cơn sưng đau khớp cấp."
+            "detail": "Chứa hải sản/nội tạng giàu nhân purine, chuyển hóa thành axit uric có thể kích hoạt cơn đau khớp cấp."
+        })
+    elif has_red_meat_purine or protein >= 48:
+        breakdown.append({
+            "condition": "Bệnh Gout",
+            "status": "Lưu ý lượng đạm",
+            "level": "orange",
+            "icon": "healing_rounded",
+            "user_matched": is_user_gout,
+            "detail": f"Món giàu đạm thịt đỏ (~{protein:.0f}g đạm); người có axit uric cao hoặc Gout nên ăn khẩu phần vừa phải và uống nhiều nước."
         })
     else:
         breakdown.append({
@@ -503,10 +525,10 @@ def analyze_food_pathology(profile, data):
             "level": "green",
             "icon": "healing_rounded",
             "user_matched": is_user_gout,
-            "detail": "Hàm lượng purine thấp, an toàn cho người có axit uric cao."
+            "detail": "Không chứa nội tạng hay hải sản giàu purine, khẩu phần đạm vừa phải an toàn cho người kiểm soát axit uric."
         })
 
-    # Nhóm C: Mỡ máu & Xơ vữa động mạch (Chất béo bão hòa & Mỡ)
+    # Nhóm C: Mỡ máu & Xơ vữa động mạch (Chất béo bão hòa & Tổng chất béo thực tế)
     is_user_lipid = any(c in user_conds for c in ["mỡ máu", "cholesterol cao"])
     has_fatty_kw = _has(CONDITION_KEYWORDS["mỡ máu"] + CONDITION_KEYWORDS["cholesterol cao"], haystack)
     if sat_fat >= 7 or (sat_fat >= 4 and is_user_lipid):
@@ -516,13 +538,13 @@ def analyze_food_pathology(profile, data):
             "level": "red" if is_user_lipid else "orange",
             "icon": "water_drop_rounded",
             "user_matched": is_user_lipid,
-            "detail": f"Chất béo bão hòa cao ({sat_fat:.1f}g/khẩu phần) từ mỡ động vật. Có thể làm tăng cholesterol LDL và mảng xơ vữa nếu dùng thường xuyên."
+            "detail": f"Chất béo bão hòa cao ({sat_fat:.1f}g/khẩu phần) từ mỡ động vật. Có thể làm tăng cholesterol LDL nếu dùng thường xuyên."
         })
-    elif sat_fat >= 3.5 or (sat_fat == 0 and (fat >= 35 or (is_user_lipid and (fat >= 25 or has_fatty_kw)))):
+    elif sat_fat >= 3.5 or (sat_fat == 0 and (fat >= 28 or has_fatty_kw)):
         detail_msg = (
             f"Chất béo bão hòa {sat_fat:.1f}g ở mức trung bình, nên cân đối cùng rau xanh."
             if sat_fat > 0 else
-            f"Tổng chất béo {fat:.0f}g hoặc chế biến chiên/mỡ, người rối loạn mỡ máu nên ăn kèm nhiều rau xanh và bỏ phần da/mỡ."
+            f"Tổng lượng chất béo khoảng {fat:.0f}g; nên ăn kèm dưa leo/rau xanh và hạn chế phần mỡ hành hoặc da/bì mỡ."
         )
         breakdown.append({
             "condition": "Mỡ máu & Tim mạch",
@@ -533,13 +555,18 @@ def analyze_food_pathology(profile, data):
             "detail": detail_msg
         })
     else:
+        detail_msg = (
+            f"Chất béo bão hòa thấp ({sat_fat:.1f}g), thân thiện với hệ mạch vành."
+            if sat_fat > 0 else
+            f"Tổng chất béo ở mức hợp lý ({fat:.0f}g), thân thiện với tim mạch."
+        )
         breakdown.append({
             "condition": "Mỡ máu & Tim mạch",
             "status": "Phù hợp",
             "level": "green",
             "icon": "water_drop_rounded",
             "user_matched": is_user_lipid,
-            "detail": f"Chất béo bão hòa thấp ({sat_fat:.1f}g), thân thiện với hệ mạch vành."
+            "detail": detail_msg
         })
 
     # Nhóm D: Tiểu đường & Đường huyết
@@ -554,11 +581,11 @@ def analyze_food_pathology(profile, data):
             "user_matched": is_user_dia,
             "detail": f"Hàm lượng đường {sugar:.1f}g/khẩu phần cao, dễ gây biến động đường huyết nhanh."
         })
-    elif sugar >= 6 or (sugar == 0 and (carbs >= 85 or has_sweet_kw or (is_user_dia and carbs >= 60))):
+    elif sugar >= 6 or (sugar == 0 and (carbs >= 95 or has_sweet_kw)):
         detail_msg = (
             f"Có chứa {sugar:.1f}g đường, cần tính vào tổng lượng carbohydrate trong ngày."
             if sugar > 0 else
-            f"Lượng tinh bột/đường ({carbs:.0f}g Carb) khá cao, người tiểu đường nên ăn rau trước và giảm 1/3 khẩu phần tinh bột."
+            f"Lượng tinh bột/đường ({carbs:.0f}g Carb) cao, người tiểu đường nên ăn rau trước và giảm 1/3 khẩu phần tinh bột."
         )
         breakdown.append({
             "condition": "Tiểu đường",
@@ -569,13 +596,18 @@ def analyze_food_pathology(profile, data):
             "detail": detail_msg
         })
     else:
+        detail_msg = (
+            f"Cung cấp ~{carbs:.0f}g tinh bột cho bữa chính; ăn rau và đạm trước cơm giúp ổn định đường huyết sau ăn."
+            if carbs >= 45 else
+            (f"Lượng đường thấp ({sugar:.1f}g), không gây tăng vọt đường huyết." if sugar > 0 else "Lượng tinh bột và đường vừa phải, ổn định đường huyết.")
+        )
         breakdown.append({
             "condition": "Tiểu đường",
-            "status": "Phù hợp",
+            "status": "Ăn vừa phải" if carbs >= 45 else "Phù hợp",
             "level": "green",
             "icon": "monitor_heart_rounded",
             "user_matched": is_user_dia,
-            "detail": f"Lượng đường thấp ({sugar:.1f}g), không gây tăng vọt đường huyết."
+            "detail": detail_msg
         })
 
     # Nhóm E: Bệnh Thận (Thận & Lọc natri / Đạm cao)
@@ -796,7 +828,11 @@ def scan_medical_document(image_bytes=None, mime_type="image/jpeg", sample_type=
     if image_bytes and gemini_client is not None:
         try:
             from google.genai import types
-            models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
+            env_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+            models_to_try = []
+            for _m in ("gemini-2.5-flash", env_model):
+                if _m and _m not in models_to_try:
+                    models_to_try.append(_m)
             for model_name in models_to_try:
                 try:
                     resp = gemini_client.models.generate_content(
@@ -809,7 +845,6 @@ def scan_medical_document(image_bytes=None, mime_type="image/jpeg", sample_type=
                             MEDICAL_OCR_PROMPT,
                         ],
                         config=types.GenerateContentConfig(
-                            temperature=0.1,
                             max_output_tokens=1500,
                         ),
                     )

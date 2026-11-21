@@ -46,7 +46,7 @@ def test_di_ung_tu_nhap():
 
 
 def test_drug_food_interactions():
-    # Tinh nang canh bao tuong tac thuoc da TAT (khong du can cu y khoa chac chan).
+    # Tinh nang canh bao tuong tac thuoc da TAT theo yeu cau.
     profile = {
         "allergies": [],
         "conditions": ["mỡ máu", "tiểu đường"],

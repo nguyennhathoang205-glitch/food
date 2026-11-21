@@ -33,7 +33,11 @@ def _get_api_keys():
     return [k.strip() for k in raw.split(",") if k.strip()]
 
 
-MODELS_TO_TRY = ["gemini-3.6-flash", "gemini-3.8-flash"]
+_DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+MODELS_TO_TRY = []
+for _m in ("gemini-2.5-flash", _DEFAULT_MODEL):
+    if _m and _m not in MODELS_TO_TRY:
+        MODELS_TO_TRY.append(_m)
 
 
 LABEL_ANALYSIS_PROMPT = """Bạn là chuyên gia thị giác máy tính và OCR phân tích thực phẩm đóng gói cao cấp.
@@ -285,16 +289,44 @@ def scan_nutrition_label(image_bytes, mime_type="image/jpeg", user_key="demo-use
     if cal <= 0 and (pro > 0 or fat > 0 or carb > 0):
         data["calories"] = round(pro * 4.0 + fat * 9.0 + carb * 4.0)
 
-    # Neu Gemini doc duoc barcode va muon lam giau du lieu bang OpenFoodFacts:
-    found_barcode = data.get("barcode")
-    if found_barcode and re.match(r"^\d{8,16}$", str(found_barcode)):
-        off_data = lookup_openfoodfacts(str(found_barcode))
+    # Neu Gemini doc duoc barcode (hoac nam trong detected_text) -> lam giau du lieu bang OpenFoodFacts:
+    found_barcode = str(data.get("barcode") or "").strip()
+    if not re.match(r"^\d{8,16}$", found_barcode):
+        det_txt = re.sub(r"(\d)\s+(\d)", r"\1\2", str(data.get("detected_text") or ""))
+        m_bc = re.search(r"\b(\d{8,14})\b", det_txt)
+        if m_bc:
+            found_barcode = m_bc.group(1)
+
+    if found_barcode and re.match(r"^\d{8,16}$", found_barcode):
+        data["barcode"] = found_barcode
+        off_data = lookup_openfoodfacts(found_barcode)
         if off_data and off_data.get("product_name"):
             data["off_verified"] = True
+            if (
+                not data.get("product_name")
+                or data.get("product_name") in ("Thực phẩm đóng gói", f"Sản phẩm {brand}")
+            ):
+                data["product_name"] = off_data["product_name"]
             if not data.get("brand") and off_data.get("brand"):
                 data["brand"] = off_data["brand"]
             if not data.get("ingredients") and off_data.get("ingredients"):
                 data["ingredients"] = off_data["ingredients"]
+            if float(data.get("calories") or 0) <= 0 and float(off_data.get("calories") or 0) > 0:
+                for k in (
+                    "calories",
+                    "protein_g",
+                    "fat_g",
+                    "saturated_fat_g",
+                    "carbs_g",
+                    "sugar_g",
+                    "sodium_mg",
+                    "fiber_g",
+                    "serving_size",
+                    "serving_size_g",
+                    "health_rating",
+                ):
+                    if off_data.get(k) is not None:
+                        data[k] = off_data[k]
 
     # Kiem tra canh bao suc khoe
     profile = health_rules.load_profile(user_key)

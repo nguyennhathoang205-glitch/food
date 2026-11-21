@@ -18,8 +18,10 @@ import '../../label_scanner.dart'
     show NutritionLabelScannerView, BarcodeScannerView, buildDiseaseBreakdown;
 import '../../widgets/meal_slot_picker.dart';
 import '../../widgets/offline_food_picker.dart';
+import '../../widgets/pro_smart_sheets.dart';
+import '../../widgets/food_3d_scanner_sheet.dart';
+import '../community/teach_food_screen.dart';
 import '../feedback_dialog.dart';
-import '../stats/statistics_screen.dart' show AiModelMetricsDialog;
 
 // ============================================================
 // SCAN
@@ -27,12 +29,18 @@ import '../stats/statistics_screen.dart' show AiModelMetricsDialog;
 
 class ScanScreen extends StatefulWidget {
   final Future<void> Function(MealEntry) onAddMeal;
+  final double dailyGoal;
 
   // Bao cho FoodScanShell biet ket qua /detect moi nhat, de FloatingHelpButton
   // co ngu canh (mon an + dinh duong vua quet) khi nguoi dung mo chat AI.
   final ValueChanged<Map<String, dynamic>>? onScanResult;
 
-  const ScanScreen({super.key, required this.onAddMeal, this.onScanResult});
+  const ScanScreen({
+    super.key,
+    required this.onAddMeal,
+    this.dailyGoal = 2000,
+    this.onScanResult,
+  });
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -47,8 +55,9 @@ class _ScanScreenState extends State<ScanScreen> {
     double protein,
     double fat,
     double carbs,
-    int portionG,
-  ) async {
+    int portionG, [
+    Uint8List? imageBytes,
+  ]) async {
     // Dong hop chon bua thi KHONG luu (truoc day tu luu vao 'Ăn phụ').
     final mealType = await pickMealSlot(context);
     if (mealType == null) {
@@ -65,6 +74,7 @@ class _ScanScreenState extends State<ScanScreen> {
         proteinG: protein,
         fatG: fat,
         carbsG: carbs,
+        thumb: MealEntry.makeThumbnailBase64(imageBytes ?? selectedImageBytes),
       ),
     );
   }
@@ -227,12 +237,22 @@ class _ScanScreenState extends State<ScanScreen> {
   // Phan tich 6 nhom benh ly lam sang tra ve tu /detect.
   List<dynamic> diseaseBreakdown = [];
 
+  // Ket qua khop mon cong dong da day qua vector CLIP 512 chieu (neu co).
+  Map<String, dynamic>? communityMatch;
+
+  // Du lieu ban do the tich & chieu sau 3D (Depth Mesh & Voxel Breakdown).
+  Map<String, dynamic>? volume3DData;
+
+  // Cac thanh phan nguoi dung bo tich (khong an hoac khong co tren dia).
+  final Set<String> excludedIngredients = {};
+
   // He so dieu chinh khau phan cho tung mon YOLO nhan dien tren mam com.
   List<double> detectionScales = [];
 
   bool get hasScanResult =>
       detections.isNotEmpty ||
       (geminiMainDish != null && geminiMainDish!.isNotEmpty) ||
+      communityMatch != null ||
       (totalNutrition != null && totalNutrition!.calories > 0);
 
   Widget _warningTile(Map<String, String> w) {
@@ -266,11 +286,17 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  // Gom canh bao: muc "Can tranh" (red) hien day du; muc "Luu y" (orange)
-  // thu gon khi co tu 2 canh bao tro len de man hinh khong bi qua dai.
+  // Gom canh bao: muc "Can tranh" (red - di ung/nguy co cao) luon hien day du;
+  // muc "Luu y" (orange) chi hien khi chua co bang 6 nhom benh ly chi tiet
+  // (diseaseBreakdown) de khong bi lap 2 hop canh bao tren cung 1 man hinh.
   Widget buildWarnings() {
     final reds = warnings.where((w) => w['level'] == 'red').toList();
-    final oranges = warnings.where((w) => w['level'] != 'red').toList();
+    final oranges = diseaseBreakdown.isNotEmpty
+        ? const <Map<String, String>>[]
+        : warnings.where((w) => w['level'] != 'red').toList();
+    if (reds.isEmpty && oranges.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       children: [
@@ -303,17 +329,6 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             ),
           ),
-        const Padding(
-          padding: EdgeInsets.only(top: 2, bottom: 4),
-          child: Text(
-            'Chỉ mang tính tham khảo, không thay thế tư vấn của bác sĩ.',
-            style: TextStyle(
-              fontSize: 10.5,
-              color: Color(0xFF94A3B8),
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -357,6 +372,9 @@ class _ScanScreenState extends State<ScanScreen> {
       warnings = [];
 
       diseaseBreakdown = [];
+      communityMatch = null;
+      volume3DData = null;
+      excludedIngredients.clear();
     });
   }
 
@@ -387,6 +405,7 @@ class _ScanScreenState extends State<ScanScreen> {
       warnings = [];
 
       diseaseBreakdown = [];
+      communityMatch = null;
     });
 
     try {
@@ -458,6 +477,14 @@ class _ScanScreenState extends State<ScanScreen> {
             : [];
 
         diseaseBreakdown = rawBreakdown is List ? rawBreakdown : [];
+        final rawComm = data['community_match'];
+        communityMatch = rawComm is Map
+            ? Map<String, dynamic>.from(rawComm)
+            : null;
+        final rawVol3D = data['volume_3d'];
+        volume3DData = rawVol3D is Map
+            ? Map<String, dynamic>.from(rawVol3D)
+            : null;
       });
 
       // Gui ket qua scan nay cho FoodScanShell de lam ngu canh cho chat AI.
@@ -487,9 +514,9 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
-  // Dinh duong tong nhan voi so "phan an", co to/dia va cac tuy chon cach an
-  // thuc te (it com, bo mo, them dam).
-  TotalNutrition get scaledTotal {
+  // Tong dinh duong goc (chua tru cac thanh phan bi bo tich) de chia ty le
+  // cho tung thanh phan trong ingredientNutritionBreakdown.
+  TotalNutrition get _baseScaledTotal {
     if (totalNutrition == null) {
       return TotalNutrition(calories: 0, proteinG: 0, fatG: 0, carbsG: 0);
     }
@@ -538,6 +565,31 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
+  // Dinh duong tong nhan voi so "phan an", co to/dia, cac tuy chon cach an
+  // thuc te va tru di cac thanh phan nguoi dung bo tich.
+  TotalNutrition get scaledTotal {
+    final base = _baseScaledTotal;
+    if (excludedIngredients.isEmpty) {
+      return base;
+    }
+    final comps = ingredientNutritionBreakdown;
+    double c = 0, p = 0, f = 0, cb = 0;
+    for (final comp in comps) {
+      final name = '${comp['name']}';
+      if (excludedIngredients.contains(name)) continue;
+      c += (comp['calories'] as num).toDouble();
+      p += (comp['protein_g'] as num).toDouble();
+      f += (comp['fat_g'] as num).toDouble();
+      cb += (comp['carbs_g'] as num).toDouble();
+    }
+    return TotalNutrition(
+      calories: c,
+      proteinG: double.parse(p.toStringAsFixed(1)),
+      fatG: double.parse(f.toStringAsFixed(1)),
+      carbsG: double.parse(cb.toStringAsFixed(1)),
+    );
+  }
+
   // Chon "mon chinh" de hien thi noi bat o tren cung: la detection co
   // confidence cao nhat trong tam anh. Cac detection con lai (bun, rau,
   // nuoc cham...) duoc coi la "thanh phan" cua mam com, hien ben duoi.
@@ -574,8 +626,255 @@ class _ScanScreenState extends State<ScanScreen> {
     if (geminiMainDish != null && geminiMainDish!.isNotEmpty) {
       return geminiMainDish!;
     }
+    if (mainDishName.isNotEmpty) {
+      return mainDishName;
+    }
+    if (communityMatch != null && communityMatch!['name_vi'] != null) {
+      return communityMatch!['name_vi'].toString();
+    }
+    return '';
+  }
 
-    return mainDishName;
+  // Phan biet mon nuoc (pho, bun, mien, hu tieu, canh, lau, sup, chao) voi
+  // mon kho / com dia de hien thi nhan tuy chinh phu hop ngu canh.
+  bool get isSoupOrNoodleDish {
+    final low = mainDishDisplayName.toLowerCase();
+    const soupKeywords = [
+      'phở',
+      'bún',
+      'miến',
+      'mì ',
+      'mì quảng',
+      'mì cay',
+      'mì gói',
+      'hủ tiếu',
+      'bánh canh',
+      'lẩu',
+      'canh',
+      'súp',
+      'cháo',
+      'bò kho',
+    ];
+    return soupKeywords.any((k) => low.contains(k));
+  }
+
+  // Danh sach thanh phan hien thi: neu backend/Gemini co tra ve ingredients thi
+  // dung truc tiep; neu fallback YOLO chua co ingredients thi tu suy luan cac
+  // thanh phan dac trung cua mon an Viet Nam de luon hien day du.
+  List<String> get effectiveIngredients {
+    if (ingredients.isNotEmpty) {
+      return ingredients;
+    }
+    final low = mainDishDisplayName.toLowerCase();
+    if (low.contains('cơm tấm')) {
+      return const [
+        'Cơm tấm',
+        'Sườn heo nướng',
+        'Bì heo trộn thính',
+        'Chả trứng hấp',
+        'Trứng ốp la',
+        'Đồ chua & dưa leo',
+        'Mỡ hành & nước mắm',
+      ];
+    }
+    if (low.contains('phở')) {
+      return const [
+        'Bánh phở tươi',
+        'Thịt bò / gà thái lát',
+        'Nước dùng hầm xương',
+        'Hành lá, ngò gai & giá đỗ',
+      ];
+    }
+    if (low.contains('bún bò')) {
+      return const [
+        'Bún sợi to',
+        'Thịt bắp bò & giò',
+        'Chả Huế',
+        'Nước dùng sả',
+        'Rau sống & bắp chuối',
+      ];
+    }
+    if (low.contains('bún chả') || low.contains('bún thịt nướng')) {
+      return const [
+        'Bún tươi',
+        'Thịt heo nướng',
+        'Chả / nem nướng',
+        'Đồ chua & rau sống',
+        'Nước mắm pha',
+      ];
+    }
+    if (low.contains('bún đậu')) {
+      return const [
+        'Bún lá',
+        'Đậu hũ chiên giòn',
+        'Thịt luộc & chả cốm',
+        'Rau kinh giới & mắm tôm',
+      ];
+    }
+    if (low.contains('bánh mì')) {
+      return const [
+        'Ổ bánh mì giòn',
+        'Thịt / chả / pate',
+        'Đồ chua, dưa leo & ngò',
+        'Sốt bơ & gia vị',
+      ];
+    }
+    if (low.contains('bánh xèo')) {
+      return const [
+        'Vỏ bánh bột gạo nghệ',
+        'Tôm & thịt ba chỉ',
+        'Giá đỗ & đậu xanh',
+        'Rau sống & nước mắm',
+      ];
+    }
+    if (low.contains('gỏi cuốn')) {
+      return const [
+        'Bánh tráng gạo',
+        'Tôm & thịt heo luộc',
+        'Bún tươi & rau sống',
+        'Nước chấm tương / mắm nêm',
+      ];
+    }
+    if (detections.length > 1) {
+      return detections.map((d) => d.nameVi).toSet().toList();
+    }
+    if (low.contains('cơm')) {
+      return const [
+        'Cơm trắng',
+        'Thịt / Đạm chính',
+        'Trứng / Món ăn kèm',
+        'Rau dưa & nước chấm',
+      ];
+    }
+    if (low.contains('bún') || low.contains('mì') || low.contains('hủ tiếu')) {
+      return const [
+        'Bún / Mì / Hủ tiếu',
+        'Thịt / Hải sản / Đạm chính',
+        'Nước dùng / Nước sốt',
+        'Rau sống & gia vị',
+      ];
+    }
+    if (mainDishDisplayName.isNotEmpty) {
+      return [
+        mainDishDisplayName,
+        'Phần tinh bột / nền món',
+        'Phần đạm chính',
+        'Rau & gia vị ăn kèm',
+      ];
+    }
+    return const [];
+  }
+
+  // Phan bo dinh duong chi tiet cho tung thanh phan trong mon an (cong lai
+  // khop 100% voi _baseScaledTotal va tong so gram hien tai).
+  List<Map<String, dynamic>> get ingredientNutritionBreakdown {
+    final items = effectiveIngredients;
+    if (items.isEmpty) return const [];
+    final total = _baseScaledTotal;
+    final baseGrams = estimatedWeightG > 0 ? estimatedWeightG : 250;
+    final totalGrams = (baseGrams * servings * portionSizeFactor).round();
+
+    // Gan trong so (gram, calo, dam, beo, carb) theo ban chat tung nguyen lieu
+    final weights = <Map<String, double>>[];
+    for (final raw in items) {
+      final s = raw.toLowerCase();
+      if (s.contains('cơm') ||
+          s.contains('bún') ||
+          s.contains('phở') ||
+          s.contains('mì') ||
+          s.contains('hủ tiếu') ||
+          s.contains('bánh tráng') ||
+          s.contains('vỏ bánh') ||
+          s.contains('tinh bột')) {
+        weights.add({'g': 0.42, 'cal': 0.36, 'p': 0.14, 'f': 0.08, 'c': 0.76});
+      } else if (s.contains('sườn') ||
+          s.contains('thịt') ||
+          s.contains('bò') ||
+          s.contains('gà') ||
+          s.contains('tôm') ||
+          s.contains('cá') ||
+          s.contains('đạm')) {
+        weights.add({'g': 0.24, 'cal': 0.30, 'p': 0.52, 'f': 0.36, 'c': 0.04});
+      } else if (s.contains('trứng') ||
+          s.contains('chả') ||
+          s.contains('đậu hũ') ||
+          s.contains('pate')) {
+        weights.add({'g': 0.14, 'cal': 0.16, 'p': 0.22, 'f': 0.24, 'c': 0.05});
+      } else if (s.contains('bì') ||
+          s.contains('mỡ') ||
+          s.contains('sốt') ||
+          s.contains('đậu phộng')) {
+        weights.add({'g': 0.08, 'cal': 0.12, 'p': 0.08, 'f': 0.26, 'c': 0.05});
+      } else if (s.contains('rau') ||
+          s.contains('dưa') ||
+          s.contains('đồ chua') ||
+          s.contains('giá') ||
+          s.contains('hành')) {
+        weights.add({'g': 0.10, 'cal': 0.04, 'p': 0.03, 'f': 0.02, 'c': 0.07});
+      } else {
+        weights.add({'g': 0.12, 'cal': 0.10, 'p': 0.10, 'f': 0.10, 'c': 0.10});
+      }
+    }
+
+    double sumKey(String k) =>
+        weights.fold(0.0, (acc, e) => acc + (e[k] ?? 0.1));
+
+    final sumG = math.max(sumKey('g'), 0.01);
+    final sumCal = math.max(sumKey('cal'), 0.01);
+    final sumP = math.max(sumKey('p'), 0.01);
+    final sumF = math.max(sumKey('f'), 0.01);
+    final sumC = math.max(sumKey('c'), 0.01);
+
+    return List.generate(items.length, (i) {
+      final w = weights[i];
+      return {
+        'name': items[i],
+        'grams': math.max(5, (totalGrams * (w['g']! / sumG)).round()),
+        'calories': math.max(5, (total.calories * (w['cal']! / sumCal)).round()),
+        'protein_g':
+            double.parse((total.proteinG * (w['p']! / sumP)).toStringAsFixed(1)),
+        'fat_g':
+            double.parse((total.fatG * (w['f']! / sumF)).toStringAsFixed(1)),
+        'carbs_g':
+            double.parse((total.carbsG * (w['c']! / sumC)).toStringAsFixed(1)),
+      };
+    });
+  }
+
+  // Loi khuyen can bang dinh duong doi thuong, than thien cho mon vua quet
+  String get practicalMealBalanceTip {
+    final low = mainDishDisplayName.toLowerCase();
+    if (low.contains('cơm tấm') ||
+        low.contains('cơm sườn') ||
+        low.contains('cơm gà') ||
+        low.contains('cơm chiên')) {
+      return 'Đĩa cơm giàu đạm và tinh bột nhưng ít chất xơ (~2g) — bạn nên ăn kèm hết phần dưa leo, đồ chua hoặc gọi thêm 1 chén canh rau, và rưới lượng nước mắm vừa phải.';
+    }
+    if (isSoupOrNoodleDish) {
+      return 'Món nước thường tập trung nhiều muối và chất béo ở phần nước lèo — bạn nên trụng thêm giá đỗ/rau sống để tăng chất xơ và hạn chế húp cạn nước dùng.';
+    }
+    if (low.contains('bánh mì')) {
+      return 'Bánh mì tiện lợi nhưng ít rau tươi — nên ăn kèm dưa leo, đồ chua trong ổ bánh và uống thêm nước lọc hoặc sữa hạt không đường.';
+    }
+    if (low.contains('bánh xèo') ||
+        low.contains('chả giò') ||
+        low.contains('bún đậu')) {
+      return 'Món có thành phần chiên giòn — nên cuốn kèm thật nhiều xà lách, rau thơm để chất xơ giúp giảm hấp thu dầu mỡ và cân bằng vị giác.';
+    }
+    return 'Mẹo cân bằng bữa ăn: Ăn phần rau củ và chất đạm trước phần tinh bột giúp no lâu hơn và giữ năng lượng ổn định suốt buổi.';
+  }
+
+  String get calorieCalculationHint {
+    final baseGrams = estimatedWeightG > 0 ? estimatedWeightG : 250;
+    final currentGrams = (baseGrams * servings * portionSizeFactor).round();
+    final cal = scaledTotal.calories.round();
+    final kcalPer100g = currentGrams > 0
+        ? ((cal / currentGrams) * 100).round()
+        : 250;
+    if (nutritionSource == 'gemini') {
+      return 'Ước tính bởi Gemini Vision cho khẩu phần ~$currentGrams g (~$kcalPer100g kcal/100g) · Chỉnh gram ở thanh trượt bên dưới';
+    }
+    return 'Tính theo chuẩn ~$kcalPer100g kcal/100g × khẩu phần ~$currentGrams g · Chỉnh gram ở thanh trượt bên dưới';
   }
 
   // Them CA mon (theo so "phan an" da chon) vao nhat ky, dung ten + dinh
@@ -618,6 +917,8 @@ class _ScanScreenState extends State<ScanScreen> {
         fatG: nutrition.fatG,
 
         carbsG: nutrition.carbsG,
+
+        thumb: MealEntry.makeThumbnailBase64(selectedImageBytes),
       ),
     );
   }
@@ -642,14 +943,14 @@ class _ScanScreenState extends State<ScanScreen> {
                         height: 44,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF059669), Color(0xFF0F172A)],
+                            colors: [Color(0xFF10B981), Color(0xFF059669)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
-                          Icons.biotech_rounded,
+                          Icons.restaurant_menu_rounded,
                           color: Colors.white,
                         ),
                       ),
@@ -658,71 +959,23 @@ class _ScanScreenState extends State<ScanScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                const Text(
-                                  'Quét món AI',
-                                  style: TextStyle(
-                                    color: accent,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        Color(0xFF059669),
-                                        Color(0xFF2563EB),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Text(
-                                    'HYBRID 4.0',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            const Text(
+                              'Quét món AI',
+                              style: TextStyle(
+                                color: accent,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 20,
+                              ),
                             ),
                             const Text(
-                              'YOLO26 Ensemble + Gemini Vision · Phân tích Nutri-Score & GL',
+                              'Chụp món ăn, nhãn bao bì hoặc mã vạch để xem dinh dưỡng 🥗',
                               style: TextStyle(
                                 color: Color(0xFF047857),
-                                fontSize: 10.5,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Chỉ số Thực nghiệm Mô hình AI',
-                        onPressed: () {
-                          showDialog<void>(
-                            context: context,
-                            builder: (_) => const AiModelMetricsDialog(),
-                          );
-                        },
-                        style: IconButton.styleFrom(
-                          backgroundColor: const Color(0xFFEFF6FF),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(
-                          Icons.precision_manufacturing_rounded,
-                          color: Color(0xFF2563EB),
-                          size: 19,
                         ),
                       ),
                     ],
@@ -793,12 +1046,90 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 34, 20, 0),
 
-                  child: AnalyzeButton(
-                    loading: loading,
+                  child: Column(
+                    children: [
+                      AnalyzeButton(
+                        loading: loading,
 
-                    enabled: selectedImageBytes != null && !loading,
+                        enabled: selectedImageBytes != null && !loading,
 
-                    onTap: detect,
+                        onTap: detect,
+                      ),
+                      if (!hasScanResult) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => showSmartMenuAdvisorSheet(
+                                  context,
+                                  dailyGoal: widget.dailyGoal,
+                                  onAddMeal: widget.onAddMeal,
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: primaryDark,
+                                  side: const BorderSide(
+                                    color: Color(0xFFA7F3D0),
+                                  ),
+                                  backgroundColor: const Color(0xFFECFDF5),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.restaurant_menu_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Quét Menu Quán',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => showFridgeToMealSheet(
+                                  context,
+                                  dailyGoal: widget.dailyGoal,
+                                  onAddMeal: widget.onAddMeal,
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFC2410C),
+                                  side: const BorderSide(
+                                    color: Color(0xFFFED7AA),
+                                  ),
+                                  backgroundColor: const Color(0xFFFFF7ED),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.kitchen_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Tủ Lạnh Gợi Ý',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -860,6 +1191,45 @@ class _ScanScreenState extends State<ScanScreen> {
                   ),
                 ),
 
+              if (communityMatch != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF6EE7B7)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.groups_rounded,
+                            color: primaryDark,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Khớp món Cộng đồng đã dạy (CLIP): ${communityMatch!['name_vi']} '
+                              '(${(((communityMatch!['similarity'] as num?)?.toDouble() ?? 0.85) * 100).toStringAsFixed(1)}%)',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: primaryDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
               if (hasScanResult)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -868,18 +1238,10 @@ class _ScanScreenState extends State<ScanScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (estimatedWeightG > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              'Khẩu phần ước tính: ~${(estimatedWeightG * servings * portionSizeFactor).round()} g',
-                              style: const TextStyle(
-                                color: Color(0xFF7F8A85),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        NutritionSummary(nutrition: scaledTotal),
+                        NutritionSummary(
+                          nutrition: scaledTotal,
+                          calculationHint: calorieCalculationHint,
+                        ),
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -894,15 +1256,15 @@ class _ScanScreenState extends State<ScanScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              const Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.tune_rounded,
                                     size: 16,
                                     color: primaryDark,
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Expanded(
+                                  SizedBox(width: 6),
+                                  Expanded(
                                     child: Text(
                                       'TÙY CHỈNH KHẨU PHẦN & CÁCH ĂN THỰC TẾ',
                                       style: TextStyle(
@@ -913,45 +1275,208 @@ class _ScanScreenState extends State<ScanScreen> {
                                       ),
                                     ),
                                   ),
-                                  SizedBox(
-                                    height: 32,
-                                    child: FilledButton.icon(
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: primary,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
+                                ],
+                              ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Số phần ăn:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12.5,
+                                        color: accent,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: servings > 1
+                                          ? () => setState(() => servings -= 1)
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline_rounded,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$servings phần',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: servings < 10
+                                          ? () => setState(() => servings += 1)
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    _buildSizeChip('Nhỏ (70%)', 0.7),
+                                    const SizedBox(width: 8),
+                                    _buildSizeChip('Vừa (100%)', 1.0),
+                                    const SizedBox(width: 8),
+                                    _buildSizeChip('Lớn (130%)', 1.3),
+                                  ],
+                                ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.pan_tool_alt_rounded,
+                                          size: 15,
+                                          color: primaryDark,
                                         ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            'Khẩu phần: ~${((estimatedWeightG > 0 ? estimatedWeightG : 350) * servings * portionSizeFactor).round()}g (${(portionSizeFactor * 100).round()}%)',
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: accent,
+                                            ),
                                           ),
                                         ),
+                                      ],
+                                    ),
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 4,
+                                        thumbShape:
+                                            const RoundSliderThumbShape(
+                                          enabledThumbRadius: 7,
+                                        ),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                          overlayRadius: 14,
+                                        ),
                                       ),
-                                      onPressed: addWholeDishToMeal,
-                                      icon: const Icon(
-                                        Icons.add_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text(
-                                        'Lưu bữa',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w800,
+                                      child: Slider(
+                                        value: portionSizeFactor.clamp(0.5, 1.8),
+                                        min: 0.5,
+                                        max: 1.8,
+                                        divisions: 13,
+                                        activeColor: primary,
+                                        onChanged: (v) => setState(
+                                          () => portionSizeFactor =
+                                              (v * 10).round() / 10.0,
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  _buildSizeChip('Nhỏ (70%)', 0.7),
-                                  const SizedBox(width: 8),
-                                  _buildSizeChip('Vừa (100%)', 1.0),
-                                  const SizedBox(width: 8),
-                                  _buildSizeChip('Lớn (130%)', 1.3),
-                                ],
+                                    Text(
+                                      '✋ Quy đổi trực quan: ${VietnamesePortionHelper.describe(((estimatedWeightG > 0 ? estimatedWeightG : 350) * servings * portionSizeFactor).round())}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF047857),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () async {
+                                          final baseNut = totalNutrition ??
+                                              TotalNutrition(
+                                                calories: 500,
+                                                proteinG: 25,
+                                                fatG: 18,
+                                                carbsG: 65,
+                                              );
+                                          final res3d =
+                                              await showFood3DVolumeScannerSheet(
+                                                context,
+                                                dishName:
+                                                    mainDishDisplayName
+                                                        .isNotEmpty
+                                                    ? mainDishDisplayName
+                                                    : 'Món ăn',
+                                                ingredients:
+                                                    effectiveIngredients,
+                                                baseNutrition: baseNut,
+                                                baseWeightG:
+                                                    estimatedWeightG > 0
+                                                    ? estimatedWeightG
+                                                    : 250,
+                                                imageBytes: selectedImageBytes,
+                                                initialVolume3D: volume3DData,
+                                              );
+                                          if (res3d != null && mounted) {
+                                            setState(() {
+                                              estimatedWeightG =
+                                                  res3d.totalWeightG;
+                                              portionSizeFactor = 1.0;
+                                              servings = 1;
+                                              totalNutrition = TotalNutrition(
+                                                calories: res3d.totalCalories
+                                                    .toDouble(),
+                                                proteinG: res3d.proteinG,
+                                                fatG: res3d.fatG,
+                                                carbsG: res3d.carbsG,
+                                              );
+                                            });
+                                          }
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF0F172A,
+                                          ),
+                                          foregroundColor: const Color(
+                                            0xFF6EE7B7,
+                                          ),
+                                          side: const BorderSide(
+                                            color: Color(0xFF10B981),
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 9,
+                                            horizontal: 10,
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.view_in_ar_rounded,
+                                          size: 17,
+                                          color: Color(0xFF34D399),
+                                        ),
+                                        label: const Text(
+                                          '📐 Đo Khẩu Phần 3D theo cỡ Tô/Đĩa ngoài đời (Đĩa 22cm · Tô 18cm · Chén 11cm)',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Wrap(
@@ -959,14 +1484,18 @@ class _ScanScreenState extends State<ScanScreen> {
                                 runSpacing: 6,
                                 children: [
                                   _buildModifierChip(
-                                    label: '🍚 Ít cơm/bún (-25% Carb)',
+                                    label: isSoupOrNoodleDish
+                                        ? '🍜 Ít bún/phở (-25% Carb)'
+                                        : '🍚 Ít cơm (-25% Carb)',
                                     selected: modLessCarb,
                                     onTap: () => setState(
                                       () => modLessCarb = !modLessCarb,
                                     ),
                                   ),
                                   _buildModifierChip(
-                                    label: '🥣 Bỏ nước béo/mỡ (-30% Béo)',
+                                    label: isSoupOrNoodleDish
+                                        ? '🥣 Không húp nước béo (-30% Béo)'
+                                        : '🥗 Bỏ mỡ hành / da mỡ (-30% Béo)',
                                     selected: modLessFat,
                                     onTap: () => setState(
                                       () => modLessFat = !modLessFat,
@@ -1053,6 +1582,53 @@ class _ScanScreenState extends State<ScanScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFA7F3D0),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.eco_rounded,
+                                size: 18,
+                                color: primaryDark,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Gợi ý cân bằng bữa ăn thực tế',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: primaryDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      practicalMealBalanceTip,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        height: 1.35,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF065F46),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1069,51 +1645,197 @@ class _ScanScreenState extends State<ScanScreen> {
               if (diseaseBreakdown.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
                     child: buildDiseaseBreakdown(diseaseBreakdown),
                   ),
                 ),
 
-              // Danh sach nguyen lieu do Gemini Vision nhan dien (chi mang
-              // tinh tham khao - khong co dinh duong rieng cho tung nguyen
-              // lieu, vi tong dinh duong da tinh cho CA mon o tren).
-              if (ingredients.isNotEmpty)
+              // Danh sach & phan tich dinh duong chi tiet tung thanh phan trong mon an
+              if (effectiveIngredients.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-
-                    child: const Text(
-                      'Thành phần trong món',
-
-                      style: TextStyle(
-                        color: accent,
-
-                        fontWeight: FontWeight.w900,
-
-                        fontSize: 17,
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: primaryLight,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.restaurant_menu_rounded,
+                                  size: 18,
+                                  color: primaryDark,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Chi tiết từng thành phần trong món',
+                                      style: TextStyle(
+                                        color: accent,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Bấm vào từng thành phần để bật/tắt nếu trên đĩa không có hoặc bạn không ăn',
+                                      style: TextStyle(
+                                        color: Color(0xFF64748B),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: effectiveIngredients
+                                .map((item) => IngredientChip(label: item))
+                                .toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          ...ingredientNutritionBreakdown.map((comp) {
+                            final name = '${comp['name']}';
+                            final excluded = excludedIngredients.contains(name);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  setState(() {
+                                    if (excluded) {
+                                      excludedIngredients.remove(name);
+                                    } else {
+                                      excludedIngredients.add(name);
+                                    }
+                                  });
+                                },
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 160),
+                                  opacity: excluded ? 0.48 : 1.0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: excluded
+                                          ? const Color(0xFFF1F5F9)
+                                          : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: excluded
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          excluded
+                                              ? Icons.remove_circle_outline_rounded
+                                              : Icons.check_circle_rounded,
+                                          size: 17,
+                                          color: excluded
+                                              ? const Color(0xFF94A3B8)
+                                              : primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 13,
+                                                  color: accent,
+                                                  decoration: excluded
+                                                      ? TextDecoration
+                                                            .lineThrough
+                                                      : null,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                excluded
+                                                    ? 'Đã bỏ chọn (không tính vào tổng calo)'
+                                                    : 'Đạm ${comp['protein_g']}g · Béo ${comp['fat_g']}g · Carb ${comp['carbs_g']}g',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF64748B),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              excluded
+                                                  ? '0 kcal'
+                                                  : '${comp['calories']} kcal',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 13,
+                                                color: excluded
+                                                    ? const Color(0xFF94A3B8)
+                                                    : primaryDark,
+                                              ),
+                                            ),
+                                            Text(
+                                              '~${comp['grams']} g',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
-              if (ingredients.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ingredients
-                          .map((item) => IngredientChip(label: item))
-                          .toList(),
-                    ),
-                  ),
-                ),
-
-              // Stage 3: Chi hien thi bang chinh khau phan tung mon khi tren
-              // mam com co NHIEU hon 1 mon khac nhau (detections.length > 1).
-              if (detections.length > 1)
+              // Bang chinh khau phan tung mon YOLO nhan dien tren anh
+              if (detections.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
@@ -1247,121 +1969,6 @@ class _ScanScreenState extends State<ScanScreen> {
                   ),
                 ),
 
-              // Chon so "phan an", co to/dia va tuy chinh thuc te truoc khi them
-              // vao nhat ky - dinh duong se duoc tinh lai tuc thi (xem scaledTotal).
-              if (hasScanResult)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'Số phần ăn',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                  color: accent,
-                                ),
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                onPressed: servings > 1
-                                    ? () {
-                                        setState(() {
-                                          servings -= 1;
-                                        });
-                                      }
-                                    : null,
-                                icon: const Icon(
-                                  Icons.remove_circle_outline_rounded,
-                                ),
-                              ),
-                              Text(
-                                '$servings',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                onPressed: servings < 10
-                                    ? () {
-                                        setState(() {
-                                          servings += 1;
-                                        });
-                                      }
-                                    : null,
-                                icon: const Icon(
-                                  Icons.add_circle_outline_rounded,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 16, color: Color(0xFFF1F5F9)),
-                          const Text(
-                            'Kích cỡ khẩu phần & Tùy chỉnh cách ăn',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildSizeChip('Nhỏ (70%)', 0.7),
-                              const SizedBox(width: 8),
-                              _buildSizeChip('Vừa (100%)', 1.0),
-                              const SizedBox(width: 8),
-                              _buildSizeChip('Lớn (130%)', 1.3),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              _buildModifierChip(
-                                label: '🍚 Ít cơm/bún (-25% Carb)',
-                                selected: modLessCarb,
-                                onTap: () => setState(
-                                  () => modLessCarb = !modLessCarb,
-                                ),
-                              ),
-                              _buildModifierChip(
-                                label: '🥣 Bỏ nước béo/mỡ (-30% Béo)',
-                                selected: modLessFat,
-                                onTap: () => setState(
-                                  () => modLessFat = !modLessFat,
-                                ),
-                              ),
-                              _buildModifierChip(
-                                label: '🥩 Thêm đạm (+25% Đạm)',
-                                selected: modExtraProtein,
-                                onTap: () => setState(
-                                  () => modExtraProtein = !modExtraProtein,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
               if (hasScanResult)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -1405,7 +2012,7 @@ class _ScanScreenState extends State<ScanScreen> {
                       height: 48,
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
                           final dishName = geminiMainDish ?? (detections.isNotEmpty ? detections.first.nameVi : 'Món ăn');
                           final conf = detections.isNotEmpty ? detections.first.confidence : 0.8;
                           final classId = detections.isNotEmpty ? detections.first.classId : null;
@@ -1414,7 +2021,7 @@ class _ScanScreenState extends State<ScanScreen> {
                             final b = detections.first.box;
                             bbox = {'x1': b.left, 'y1': b.top, 'x2': b.right, 'y2': b.bottom};
                           }
-                          FeedbackDialog.show(
+                          final correctedName = await FeedbackDialog.show(
                             context,
                             userKey: AppSession.currentUserKey,
                             predictedName: dishName,
@@ -1424,6 +2031,15 @@ class _ScanScreenState extends State<ScanScreen> {
                             boundingBox: bbox,
                             baseUrl: AppConfig.baseUrl,
                           );
+                          if (correctedName != null &&
+                              correctedName.trim().isNotEmpty &&
+                              mounted) {
+                            setState(() {
+                              geminiMainDish = correctedName.trim();
+                              ingredients = [];
+                              excludedIngredients.clear();
+                            });
+                          }
                         },
                         icon: const Icon(Icons.school_outlined, size: 18, color: Color(0xFFD97706)),
                         label: const Text(
@@ -1438,6 +2054,49 @@ class _ScanScreenState extends State<ScanScreen> {
                           backgroundColor: const Color(0xFFFFFBEB),
                           side: const BorderSide(color: Color(0xFFFDE68A), width: 1.2),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (hasScanResult && selectedImageBytes != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    child: SizedBox(
+                      height: 46,
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          TeachFoodScreen.open(
+                            context,
+                            initialImage: selectedImageBytes,
+                            initialName: mainDishDisplayName,
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.add_photo_alternate_rounded,
+                          size: 18,
+                          color: primaryDark,
+                        ),
+                        label: const Text(
+                          'Món đặc sản mới? Dạy AI bằng ảnh này (CLIP Few-shot)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: primaryDark,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFFECFDF5),
+                          side: const BorderSide(
+                            color: Color(0xFFA7F3D0),
+                            width: 1.2,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                     ),
@@ -1767,8 +2426,13 @@ class MainDishBanner extends StatelessWidget {
 
 class NutritionSummary extends StatelessWidget {
   final TotalNutrition nutrition;
+  final String? calculationHint;
 
-  const NutritionSummary({super.key, required this.nutrition});
+  const NutritionSummary({
+    super.key,
+    required this.nutrition,
+    this.calculationHint,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1787,6 +2451,7 @@ class NutritionSummary extends StatelessWidget {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1834,7 +2499,39 @@ class NutritionSummary extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          if (calculationHint != null && calculationHint!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calculate_outlined,
+                    size: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      calculationHint!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
           Row(
             children: [
               SummaryMacro(
@@ -1939,7 +2636,7 @@ class _MealQualityBadgeBar extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF064E3B)],
+          colors: [Color(0xFF059669), Color(0xFF0D9488)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1948,7 +2645,12 @@ class _MealQualityBadgeBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // Wrap thay cho Row: 4 thanh phan co do rong co dinh, man hinh hep
+          // (khung dien thoai ~400px) thi Row bi tran phai. Wrap tu xuong dong.
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Text(
                 'NUTRI-SCORE',
@@ -1959,8 +2661,8 @@ class _MealQualityBadgeBar extends StatelessWidget {
                   letterSpacing: 0.6,
                 ),
               ),
-              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: grades.map((g) {
                   final active = g == grade;
                   final c = gradeColors[g]!;
@@ -1989,16 +2691,12 @@ class _MealQualityBadgeBar extends StatelessWidget {
                   );
                 }).toList(),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  gradeDesc,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                  ),
+              Text(
+                gradeDesc,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
                 ),
               ),
               Container(
@@ -2257,23 +2955,29 @@ class DetectionPainter extends CustomPainter {
     );
 
     for (final detection in detections) {
+      final boxArea =
+          (detection.box.right - detection.box.left).abs() *
+          (detection.box.bottom - detection.box.top).abs();
+      final imgArea = math.max(imageWidth * imageHeight, 1.0);
+      // Neu chi co 1 box bao trum > 72% buc anh (toan dia com/to pho), khong ve
+      // khung vien sat mep anh bi bo goc cat lem.
+      if (detections.length == 1 && (boxArea / imgArea) > 0.72) {
+        continue;
+      }
+
       final rect = Rect.fromLTRB(
-        offsetX + detection.box.left * scale,
-
-        offsetY + detection.box.top * scale,
-
-        offsetX + detection.box.right * scale,
-
-        offsetY + detection.box.bottom * scale,
+        (offsetX + detection.box.left * scale).clamp(6.0, size.width - 6.0),
+        (offsetY + detection.box.top * scale).clamp(6.0, size.height - 6.0),
+        (offsetX + detection.box.right * scale).clamp(6.0, size.width - 6.0),
+        (offsetY + detection.box.bottom * scale).clamp(6.0, size.height - 6.0),
       );
 
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(9)),
-
+        RRect.fromRectAndRadius(rect, const Radius.circular(12)),
         Paint()
           ..color = detection.confidenceColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
+          ..strokeWidth = 2.8,
       );
     }
 
