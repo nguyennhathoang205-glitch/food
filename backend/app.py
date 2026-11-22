@@ -202,14 +202,13 @@ code block, khong giai thich gi them truoc/sau), dung CHINH XAC cau truc:
 Yeu cau:
 - CHI dua tren nhung gi THAT SU NHIN THAY trong anh. Tuyet doi khong doan
   mon an hay nguyen lieu khong xuat hien trong anh.
-- "main_dish": ten tieng Viet co dau.
+- "main_dish": ten tieng Viet co dau, GHI RO TEN CU THE cua mon va loai rau/canh/thit (KHONG ghi chung chung la "rau luoc" hay "canh" neu nhin ro loai rau).
   + Neu anh la 1 mon (1 to, 1 dia): ten mon pho bien nhat nguoi Viet se goi.
-  + Neu anh la mam com co nhieu mon rieng: ghi "Mam com" kem mon noi bat,
-    vd "Mam com (ga luoc, canh, rau luoc)".
-  + Neu anh chi co trai cay: ghi ten loai trai cay hoac "Dia trai cay".
+  + Neu anh la mam com co nhieu mon rieng: ghi "Mâm cơm" kem ten CU THE tung mon tren mam,
+    vd "Mâm cơm (thịt heo quay, canh cải nấu mọc, rau muống luộc, cà pháo muối)".
+  + Neu anh chi co trai cay: ghi ten loai trai cay cu the hoac "Đĩa trái cây".
   + Neu anh khong co do an: de null.
-- "ingredients": 3-10 mon/thanh phan/loai trai cay NHIN THAY trong anh,
-  moi phan tu la 1 cum tu ngan tieng Viet co dau.
+- "ingredients": liet ke CHI TIET va CU THE 3-10 mon/thanh phan/loai rau/trai cay NHIN THAY trong anh (vd: "Rau muống luộc", "Canh cải ngọt nấu mọc", "Thịt heo quay giòn bì", "Cà pháo muối", "Xoài xanh", "Nước mắm tỏi ớt" - tuyet doi khong ghi chung chung "rau luộc" khi co the nhan ra rau muống, rau cải, bắp cải, bông cải...), moi phan tu la 1 cum tu ngan tieng Viet co dau.
 - "estimated_weight_g": uoc tinh TONG KHOI LUONG phan an (gam) sat thuc te
   khau phan 1 nguoi Viet an:
   + 1 dia com tam / com suon / com ga tieu chuan: 350 - 400g (~600-680 kcal,
