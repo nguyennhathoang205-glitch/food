@@ -8,8 +8,8 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        # Doi thanh dia chi ngrok cua ban (khong co dau / o cuoi)
-        API_BASE_URL: "https://TEN-CUA-BAN.ngrok-free.app"
+        # Dia chi Hugging Face Space cua ban (khong co dau / o cuoi)
+        API_BASE_URL: "https://quangdadada-foodscan-api.hf.space"
     scripts:
       - name: Cai thu vien
         script: cd mobile && flutter pub get
