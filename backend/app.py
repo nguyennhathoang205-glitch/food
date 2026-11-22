@@ -126,7 +126,7 @@ GEMINI_API_KEYS = [
     if k.strip()
 ]
 
-GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
+GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
 
 _gemini_key_index = 0
 
@@ -336,7 +336,7 @@ def analyze_dish_with_gemini(
     keys_tried = 0
     max_keys_per_request = min(len(GEMINI_API_KEYS), 2)
     models_to_try = []
-    for _m in (GEMINI_MODEL_NAME, "gemini-3.8-flash", "gemini-2.5-flash"):
+    for _m in (GEMINI_MODEL_NAME, "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"):
         if _m and _m not in models_to_try:
             models_to_try.append(_m)
 
@@ -365,15 +365,13 @@ def analyze_dish_with_gemini(
 
             except json.JSONDecodeError as e:
                 last_error = f"JSON khong hop le: {e}"
-                break
+                continue
 
             except Exception as e:
                 last_error = str(e)
-                if "NOT_FOUND" in last_error or "404" in last_error:
-                    # Thu model fallback ngay tren cung key
+                if "NOT_FOUND" in last_error or "404" in last_error or _is_temporary_error(last_error):
+                    # Neu model nay 404 hoac 503 qua tai tam thoi -> thu ngay model tiep theo tren cung key
                     continue
-                if _is_temporary_error(last_error):
-                    time.sleep(0.4)
                 break
 
         keys_tried += 1
@@ -497,21 +495,26 @@ _DEFAULT_DISH_INGREDIENTS = {
 
 def infer_default_ingredients(dish_name, detections=None):
     """Suy luan danh sach thanh phan mon an khi Gemini chua tra ve."""
-    low = (dish_name or "").lower()
-    for key, items in _DEFAULT_DISH_INGREDIENTS.items():
-        if key in low:
-            return list(items)
     if detections:
         names = []
         for d in detections:
             n = str(d.get("name_vi") or "").strip()
             if n and n not in names:
                 names.append(n)
-            for key, items in _DEFAULT_DISH_INGREDIENTS.items():
-                if key in n.lower():
-                    return list(items)
+        # Neu tren mam com co nhieu mon khac nhau (detections > 1 mon), tra ve
+        # danh sach tat ca cac mon tren mam de hien thi day du tung mon.
         if len(names) > 1:
             return names
+    low = (dish_name or "").lower()
+    for key, items in _DEFAULT_DISH_INGREDIENTS.items():
+        if key in low:
+            return list(items)
+    if detections:
+        for d in detections:
+            n = str(d.get("name_vi") or "").strip().lower()
+            for key, items in _DEFAULT_DISH_INGREDIENTS.items():
+                if key in n:
+                    return list(items)
     if "bún" in low:
         return ["Bún tươi", "Thịt / Đạm chính", "Nước dùng / Nước chấm", "Rau sống & gia vị"]
     if "cơm" in low:
@@ -2006,7 +2009,17 @@ def detect():
         total_nutrition = gemini_total if has_real_total else yolo_total
         nutrition_source = "gemini" if has_real_total else "yolo"
     else:
-        main_dish = detections[0]["name_vi"] if detections else None
+        unique_yolo_names = []
+        for d in detections:
+            n = str(d.get("name_vi") or "").strip()
+            if n and n not in unique_yolo_names:
+                unique_yolo_names.append(n)
+        if len(unique_yolo_names) > 1:
+            main_dish = "Mâm cơm: " + ", ".join(unique_yolo_names)
+        elif len(unique_yolo_names) == 1:
+            main_dish = unique_yolo_names[0]
+        else:
+            main_dish = None
         ingredients = []
         total_nutrition = yolo_total
         nutrition_source = "yolo"
@@ -3191,7 +3204,7 @@ def _gemini_call(contents, config=None):
     keys_tried = 0
     max_keys = min(len(GEMINI_API_KEYS), 2)
     models_to_try = []
-    for _m in (GEMINI_MODEL_NAME, "gemini-3.8-flash", "gemini-2.5-flash"):
+    for _m in (GEMINI_MODEL_NAME, "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"):
         if _m and _m not in models_to_try:
             models_to_try.append(_m)
 
@@ -3211,10 +3224,8 @@ def _gemini_call(contents, config=None):
                 return response.text
             except Exception as e:
                 err_str = str(e)
-                if "NOT_FOUND" in err_str or "404" in err_str:
+                if "NOT_FOUND" in err_str or "404" in err_str or _is_temporary_error(err_str):
                     continue
-                if _is_temporary_error(err_str):
-                    time.sleep(0.4)
                 print(f"[gemini] loi: {e}")
                 break
 
