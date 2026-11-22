@@ -2,8 +2,6 @@
 // APP CONFIG & ENVIRONMENT
 // ============================================================
 
-import 'package:flutter/foundation.dart';
-
 class AppConfig {
   static const String appName = 'Food Scan Pro';
   static const String appVersion = '1.2.0';
