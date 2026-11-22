@@ -828,9 +828,9 @@ def scan_medical_document(image_bytes=None, mime_type="image/jpeg", sample_type=
     if image_bytes and gemini_client is not None:
         try:
             from google.genai import types
-            env_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+            env_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
             models_to_try = []
-            for _m in ("gemini-2.5-flash", env_model):
+            for _m in (env_model, "gemini-3.8-flash", "gemini-2.5-flash"):
                 if _m and _m not in models_to_try:
                     models_to_try.append(_m)
             for model_name in models_to_try:

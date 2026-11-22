@@ -33,9 +33,9 @@ def _get_api_keys():
     return [k.strip() for k in raw.split(",") if k.strip()]
 
 
-_DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+_DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 MODELS_TO_TRY = []
-for _m in ("gemini-2.5-flash", _DEFAULT_MODEL):
+for _m in (_DEFAULT_MODEL, "gemini-3.8-flash", "gemini-2.5-flash"):
     if _m and _m not in MODELS_TO_TRY:
         MODELS_TO_TRY.append(_m)
 

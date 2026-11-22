@@ -126,7 +126,7 @@ GEMINI_API_KEYS = [
     if k.strip()
 ]
 
-GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
 _gemini_key_index = 0
 
@@ -335,9 +335,10 @@ def analyze_dish_with_gemini(
     last_error = None
     keys_tried = 0
     max_keys_per_request = min(len(GEMINI_API_KEYS), 2)
-    models_to_try = ["gemini-2.5-flash"]
-    if GEMINI_MODEL_NAME and GEMINI_MODEL_NAME not in models_to_try:
-        models_to_try.append(GEMINI_MODEL_NAME)
+    models_to_try = []
+    for _m in (GEMINI_MODEL_NAME, "gemini-3.8-flash", "gemini-2.5-flash"):
+        if _m and _m not in models_to_try:
+            models_to_try.append(_m)
 
     while keys_tried < max_keys_per_request:
         client = get_gemini_client()
@@ -1748,6 +1749,16 @@ def detect():
                                     continue
                             all_boxes.append((box, offset))
 
+        # Neu o nguong conf=0.40 chua bat duoc box nao (anh chup hoi xa/nghieng
+        # tren dien thoai), ha nguong xuong 0.05 va lay box co do tin cay cao nhat
+        # de dam bao luon co ket qua fallback.
+        if not all_boxes:
+            low_results = list(model.predict(image, conf=0.05, verbose=False))
+            if low_results and getattr(low_results[0], "boxes", None):
+                best_box = max(low_results[0].boxes, key=lambda b: float(b.conf[0]), default=None)
+                if best_box is not None:
+                    all_boxes.append((best_box, 0))
+
     except Exception as e:
         return jsonify({
             "status": "error",
@@ -1962,7 +1973,7 @@ def detect():
     # Lay ket qua Gemini Vision da chay song song voi YOLO. Neu YOLO da nhan
     # dien duoc mon an (detections khong rong), gioi han cho Gemini toi da 4.5s
     # de nguoi dung khong bao gio phai doi lau.
-    gemini_timeout = 4.5 if detections else 8.0
+    gemini_timeout = 7.5 if detections else 10.0
     try:
         gemini_analysis = gemini_future.result(timeout=gemini_timeout)
     except (FuturesTimeoutError, Exception):
@@ -3179,9 +3190,10 @@ def _gemini_call(contents, config=None):
 
     keys_tried = 0
     max_keys = min(len(GEMINI_API_KEYS), 2)
-    models_to_try = ["gemini-2.5-flash"]
-    if GEMINI_MODEL_NAME and GEMINI_MODEL_NAME not in models_to_try:
-        models_to_try.append(GEMINI_MODEL_NAME)
+    models_to_try = []
+    for _m in (GEMINI_MODEL_NAME, "gemini-3.8-flash", "gemini-2.5-flash"):
+        if _m and _m not in models_to_try:
+            models_to_try.append(_m)
 
     while keys_tried < max_keys:
         client = get_gemini_client()
