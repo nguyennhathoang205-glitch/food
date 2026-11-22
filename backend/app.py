@@ -917,6 +917,21 @@ def save_profile(user_key):
 
 
 # ============================================================
+# ROOT HEALTH CHECK & STATUS PAGE
+# ============================================================
+
+@app.route("/", methods=["GET"])
+def index_status():
+    return jsonify({
+        "status": "ok",
+        "service": "FoodScan AI Backend Server",
+        "engine": "YOLO26s + Gemini 2.5 Flash + CLIP Few-shot + 3D Volume Estimation",
+        "foods_loaded": len(_foods_cache),
+        "endpoints": ["/detect", "/api/foods", "/api/scan/volume-3d", "/api/label/scan", "/api/barcode/<code_str>"],
+    })
+
+
+# ============================================================
 # MEAL LOGS & THUMBNAIL STORE
 # ============================================================
 
