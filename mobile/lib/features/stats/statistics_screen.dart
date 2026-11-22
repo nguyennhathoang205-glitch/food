@@ -3090,7 +3090,8 @@ class _SmartGroceryListDialogState extends State<_SmartGroceryListDialog> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
+            ],
           ),
         ),
       ),
