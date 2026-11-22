@@ -656,10 +656,405 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
   Map<String, dynamic>? _plan;
   int _selectedDay = 0;
 
+  // Lua chon nguyen lieu / mon muon an rieng cho tung ngay (0..6)
+  final Map<int, String> _dayPreferences = {};
+  final Map<int, int> _dayVariationSeeds = {};
+  final Set<String> _expandedRecipeKeys = {};
+  final TextEditingController _customPrefCtrl = TextEditingController();
+
+  static const List<Map<String, String>> _prefOptions = [
+    {'id': '', 'label': '✨ Linh hoạt'},
+    {'id': 'Thịt gà', 'label': '🐔 Thịt gà'},
+    {'id': 'Thịt bò', 'label': '🥩 Thịt bò'},
+    {'id': 'Thịt heo', 'label': '🐖 Thịt heo'},
+    {'id': 'Cá tươi', 'label': '🐟 Cá tươi'},
+    {'id': 'Đậu hũ & Trứng', 'label': '🥚 Đậu hũ & Trứng'},
+  ];
+
+  static const Map<String, Map<String, dynamic>> _localPrefPools = {
+    'ga': {
+      'focus': 'Thực đơn Thịt Gà giàu đạm nạc, ít béo bão hòa',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Phở gà ta ít bánh (bỏ da) + Giá trụng', 'portion_g': 360, 'calories': 420, 'protein_g': 30, 'fat_g': 8, 'carbs_g': 54},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Miến gà nấu nấm hương + Rau thơm', 'portion_g': 350, 'calories': 395, 'protein_g': 28, 'fat_g': 7, 'carbs_g': 52},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Cháo yến mạch ức gà xé + Hành ngò', 'portion_g': 330, 'calories': 380, 'protein_g': 27, 'fat_g': 7, 'carbs_g': 50},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + Ức gà áp chảo sốt tiêu đen + Bông cải xanh luộc', 'portion_g': 400, 'calories': 580, 'protein_g': 42, 'fat_g': 12, 'carbs_g': 72},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + Gà kho gừng sả ít muối + Canh cải ngọt', 'portion_g': 400, 'calories': 590, 'protein_g': 40, 'fat_g': 13, 'carbs_g': 74},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Bún gạo lứt gà nướng mật ong + Salad dưa leo cà chua', 'portion_g': 390, 'calories': 560, 'protein_g': 39, 'fat_g': 11, 'carbs_g': 70},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': 'Ức gà hấp lá chanh + Cơm gạo lứt + Bí xanh luộc', 'portion_g': 370, 'calories': 490, 'protein_g': 38, 'fat_g': 8, 'carbs_g': 64},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Gỏi cuốn ức gà rau củ (3 cuốn) + Canh nấm đậu hũ', 'portion_g': 340, 'calories': 450, 'protein_g': 34, 'fat_g': 8, 'carbs_g': 58},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Salad ức gà áp chảo + Khoai lang hấp + Súp bí đỏ', 'portion_g': 350, 'calories': 465, 'protein_g': 36, 'fat_g': 9, 'carbs_g': 56},
+      ],
+    },
+    'bo': {
+      'focus': 'Thực đơn Thịt Bò bổ máu, giàu Sắt & Kẽm',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Phở bò thăn trần nước trong + Nhiều hành giá', 'portion_g': 380, 'calories': 440, 'protein_g': 31, 'fat_g': 10, 'carbs_g': 55},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bún bò thăn nạc ít mỡ + Rau sống', 'portion_g': 380, 'calories': 455, 'protein_g': 30, 'fat_g': 11, 'carbs_g': 56},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bánh mì nguyên cám kẹp bò áp chảo & xà lách', 'portion_g': 260, 'calories': 415, 'protein_g': 27, 'fat_g': 11, 'carbs_g': 50},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + Thịt bò xào bông cải xanh + Canh bí đao', 'portion_g': 410, 'calories': 600, 'protein_g': 41, 'fat_g': 14, 'carbs_g': 73},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + Bò lúc lắc ớt chuông + Salad rau mầm', 'portion_g': 400, 'calories': 610, 'protein_g': 40, 'fat_g': 15, 'carbs_g': 74},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Bún thịt bò xào sả ớt ít dầu + Dưa leo & rau thơm', 'portion_g': 390, 'calories': 575, 'protein_g': 37, 'fat_g': 13, 'carbs_g': 72},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': 'Thịt bò thăn cuộn nấm kim châm áp chảo + Cơm gạo lứt + Rau luộc', 'portion_g': 370, 'calories': 500, 'protein_g': 36, 'fat_g': 12, 'carbs_g': 62},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Canh cải bò băm nấu gừng + Đậu hũ non hấp + 1 chén cơm nhỏ', 'portion_g': 360, 'calories': 475, 'protein_g': 33, 'fat_g': 10, 'carbs_g': 60},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Salad bò nướng kiểu Việt + Khoai lang mật hấp', 'portion_g': 350, 'calories': 485, 'protein_g': 35, 'fat_g': 11, 'carbs_g': 58},
+      ],
+    },
+    'heo': {
+      'focus': 'Thực đơn Thịt Heo Nạc cân bằng, đậm vị cơm nhà',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bún mọc thịt nạc heo + Rau sống', 'portion_g': 360, 'calories': 425, 'protein_g': 26, 'fat_g': 10, 'carbs_g': 56},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Hủ tiếu thịt heo nạc nước trong + Giá hẹ', 'portion_g': 370, 'calories': 420, 'protein_g': 27, 'fat_g': 9, 'carbs_g': 57},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bánh cuốn nhân thịt heo nạc băm & mộc nhĩ', 'portion_g': 300, 'calories': 405, 'protein_g': 23, 'fat_g': 9, 'carbs_g': 56},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + Thịt thăn heo luộc cuốn rau sống + Canh bí xanh', 'portion_g': 400, 'calories': 585, 'protein_g': 38, 'fat_g': 13, 'carbs_g': 75},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + Sườn heo non rim nhạt + Đậu cô ve luộc', 'portion_g': 400, 'calories': 605, 'protein_g': 37, 'fat_g': 15, 'carbs_g': 74},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Bún thịt heo nướng nạc ít mỡ + Đồ chua & rau thơm', 'portion_g': 380, 'calories': 565, 'protein_g': 34, 'fat_g': 13, 'carbs_g': 72},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': 'Thịt thăn heo áp chảo sả + Cơm gạo lứt + Canh mồng tơi', 'portion_g': 370, 'calories': 495, 'protein_g': 35, 'fat_g': 11, 'carbs_g': 64},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Canh bí đỏ nấu thịt heo băm + Đậu phụ luộc + 1 chén cơm', 'portion_g': 360, 'calories': 480, 'protein_g': 28, 'fat_g': 11, 'carbs_g': 66},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Bắp cải cuộn thịt nạc heo hấp gừng + Cơm gạo lứt', 'portion_g': 360, 'calories': 470, 'protein_g': 32, 'fat_g': 9, 'carbs_g': 62},
+      ],
+    },
+    'ca': {
+      'focus': 'Thực đơn Cá giàu Omega-3, tốt cho tim mạch',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bún cá lóc hấp nghệ + Rau cần & giá đỗ', 'portion_g': 360, 'calories': 410, 'protein_g': 28, 'fat_g': 8, 'carbs_g': 54},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Cháo cá diêu hồng nấu gừng + Hành ngò', 'portion_g': 350, 'calories': 385, 'protein_g': 26, 'fat_g': 7, 'carbs_g': 52},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + Cá hồi áp chảo + Salad dưa leo cà chua', 'portion_g': 390, 'calories': 605, 'protein_g': 40, 'fat_g': 17, 'carbs_g': 68},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + Cá basa kho nghệ ít muối + Canh rau ngót', 'portion_g': 400, 'calories': 580, 'protein_g': 37, 'fat_g': 14, 'carbs_g': 73},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': 'Cá diêu hồng hấp gừng hành + Canh cải ngọt + 1 chén cơm nhỏ', 'portion_g': 380, 'calories': 495, 'protein_g': 36, 'fat_g': 10, 'carbs_g': 62},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Cá lóc hấp bầu + Cơm gạo lứt + Rau củ luộc', 'portion_g': 370, 'calories': 485, 'protein_g': 35, 'fat_g': 9, 'carbs_g': 64},
+      ],
+    },
+    'chay': {
+      'focus': 'Thực đơn Đậu Hũ, Trứng & Rau Củ thanh đạm, nhẹ bụng',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Khoai lang hấp + 2 quả trứng gà luộc + Sữa hạt', 'portion_g': 300, 'calories': 395, 'protein_g': 19, 'fat_g': 11, 'carbs_g': 53},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bún riêu đậu hũ nấm tươi thanh đạm + Rau sống', 'portion_g': 360, 'calories': 400, 'protein_g': 21, 'fat_g': 9, 'carbs_g': 56},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + Đậu hũ sốt nấm đông cô + Bông cải xanh luộc', 'portion_g': 390, 'calories': 540, 'protein_g': 28, 'fat_g': 12, 'carbs_g': 74},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + Trứng cuộn rau củ + Canh nấm hạt sen', 'portion_g': 380, 'calories': 555, 'protein_g': 29, 'fat_g': 14, 'carbs_g': 72},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': 'Đậu hũ non hấp tương gừng + Rau muống luộc + Cơm gạo lứt', 'portion_g': 360, 'calories': 465, 'protein_g': 25, 'fat_g': 10, 'carbs_g': 66},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Miến trộn nấm hương đậu phụ & rau củ thập cẩm', 'portion_g': 350, 'calories': 450, 'protein_g': 24, 'fat_g': 9, 'carbs_g': 65},
+      ],
+    },
+  };
+
   @override
   void initState() {
     super.initState();
     _loadPlan();
+  }
+
+  @override
+  void dispose() {
+    _customPrefCtrl.dispose();
+    super.dispose();
+  }
+
+  static Map<String, dynamic> buildLocalRecipeAndShopping(
+    String nameVi,
+    int portionG,
+  ) {
+    final low = nameVi.toLowerCase();
+    final scale = (portionG / 360.0).clamp(0.7, 1.8);
+    int g(num v) => ((v * scale) / 5.0).round() * 5;
+
+    final shopping = <String>[];
+    var cookMin = 18;
+    var steps = <String>[];
+
+    if (low.contains('gà')) {
+      shopping.add('Ức gà / Thịt gà ta lọc da: ${g(160)}g');
+    } else if (low.contains('bò')) {
+      shopping.add('Thịt bò thăn / bắp bò tươi: ${g(150)}g');
+    } else if (low.contains('sườn')) {
+      shopping.add('Sườn heo non nhiều nạc: ${g(160)}g');
+    } else if (low.contains('heo') ||
+        low.contains('lợn') ||
+        low.contains('thịt thăn') ||
+        low.contains('thịt băm') ||
+        low.contains('thịt nướng') ||
+        low.contains('mọc')) {
+      shopping.add('Thịt thăn heo nạc / mọc heo: ${g(150)}g');
+    } else if (low.contains('cá hồi')) {
+      shopping.add('Cá hồi phi lê tươi: ${g(150)}g');
+    } else if (low.contains('cá')) {
+      shopping.add('Cá tươi phi lê (cá lóc / diêu hồng / basa): ${g(160)}g');
+    } else if (low.contains('trứng')) {
+      shopping.add('Trứng gà ta tươi: 2 quả');
+    } else if (low.contains('đậu hũ') || low.contains('đậu phụ')) {
+      shopping.add('Đậu hũ non / đậu phụ trắng: ${g(180)}g');
+    }
+
+    if (low.contains('nấm')) {
+      shopping.add('Nấm hương / nấm đông cô / nấm kim châm: ${g(80)}g');
+    }
+
+    if (low.contains('gạo lứt')) {
+      shopping.add('Gạo lứt dẻo: ${g(90)}g (nấu thành ~${g(190)}g cơm)');
+    } else if (low.contains('cơm')) {
+      shopping.add('Gạo trắng thơm: ${g(90)}g (nấu thành ~${g(190)}g cơm)');
+    } else if (low.contains('phở')) {
+      shopping.add('Bánh phở tươi: ${g(140)}g');
+    } else if (low.contains('bún')) {
+      shopping.add('Bún tươi sợi nhỏ: ${g(150)}g');
+    } else if (low.contains('miến')) {
+      shopping.add('Miến dong khô: ${g(65)}g');
+    } else if (low.contains('hủ tiếu')) {
+      shopping.add('Sợi hủ tiếu dai: ${g(140)}g');
+    } else if (low.contains('khoai lang')) {
+      shopping.add('Khoai lang mật / khoai lang tím: ${g(180)}g');
+    } else if (low.contains('yến mạch')) {
+      shopping.add('Yến mạch cán dẹt: ${g(65)}g');
+    } else if (low.contains('bánh mì')) {
+      shopping.add('Bánh mì nguyên cám / bánh mì giòn: 1 ổ');
+    } else if (low.contains('gỏi cuốn') || low.contains('bánh cuốn')) {
+      shopping.add('Bánh tráng gạo / bột bánh cuốn & bún tươi: ${g(120)}g');
+    }
+
+    if (low.contains('bông cải')) {
+      shopping.add('Bông cải xanh (súp lơ): ${g(130)}g');
+    } else if (low.contains('bí đỏ')) {
+      shopping.add('Bí đỏ tươi: ${g(140)}g');
+    } else if (low.contains('bí xanh') || low.contains('bí đao')) {
+      shopping.add('Bí xanh (bí đao): ${g(140)}g');
+    } else if (low.contains('bầu')) {
+      shopping.add('Bầu non tươi: ${g(140)}g');
+    } else if (low.contains('rau muống')) {
+      shopping.add('Rau muống tươi: ${g(150)}g');
+    } else if (low.contains('mồng tơi')) {
+      shopping.add('Rau mồng tơi & mướp hương: ${g(140)}g');
+    } else if (low.contains('cải')) {
+      shopping.add('Rau cải ngọt / cải thìa tươi: ${g(140)}g');
+    } else if (low.contains('rau ngót')) {
+      shopping.add('Rau ngót tươi: ${g(130)}g');
+    } else if (low.contains('đậu cô ve')) {
+      shopping.add('Đậu cô ve tươi: ${g(130)}g');
+    } else if (low.contains('táo') ||
+        low.contains('ổi') ||
+        low.contains('thanh long') ||
+        low.contains('lê') ||
+        low.contains('đu đủ') ||
+        low.contains('việt quất') ||
+        low.contains('dâu')) {
+      shopping.add('Trái cây tươi (${nameVi.split('+').first.trim()}): ${g(160)}g');
+      if (low.contains('hạt')) {
+        shopping.add('Hạt dinh dưỡng (hạnh nhân / óc chó rang mộc): ${g(25)}g');
+      }
+      cookMin = 5;
+    } else {
+      shopping.add('Rau xanh, giá đỗ, dưa leo & hành ngò: ${g(120)}g');
+    }
+
+    if (cookMin == 5) {
+      steps = [
+        'Bước 1 (Sơ chế): Rửa sạch trái cây với nước muối loãng, để ráo và cắt miếng vừa ăn (~${portionG}g).',
+        'Bước 2 (Kết hợp): Dùng kèm hạt rang mộc không tẩm muối/đường để bổ sung chất béo tốt giúp no lâu.',
+        'Bước 3 (Thưởng thức): Ăn cách bữa chính 2–3 tiếng giúp ổn định đường huyết và nạp vitamin tự nhiên.',
+      ];
+    } else if (low.contains('phở') ||
+        low.contains('bún') ||
+        low.contains('miến') ||
+        low.contains('hủ tiếu') ||
+        low.contains('cháo')) {
+      shopping.add('Gia vị nấu: Gừng nướng, hành tím, sả, hành ngò, chanh & nước mắm nhạt');
+      cookMin = 20;
+      steps = [
+        'Bước 1 (Sơ chế): Rửa sạch nguyên liệu đạm và rau; trụng nhanh bún/phở/miến qua nước sôi cho mềm sạch.',
+        'Bước 2 (Nấu nước dùng/cháo): Đun nước dùng trong với gừng nướng và hành tím, cho thịt/cá vào chín tới, nêm nhạt dưới 1/2 muỗng cà phê muối.',
+        'Bước 3 (Hoàn thiện): Xếp phần tinh bột và đạm vào tô, thêm nhiều rau xanh/giá trụng và hành ngò, hạn chế váng mỡ.',
+      ];
+    } else if (low.contains('hấp') || low.contains('luộc') || low.contains('cuốn')) {
+      shopping.add('Gia vị: Gừng tươi, lá chanh/sả, tỏi, nước chấm pha nhạt');
+      cookMin = 18;
+      steps = [
+        'Bước 1 (Sơ chế): Làm sạch phần đạm chính, ướp nhẹ với gừng thái sợi, sả hoặc lá chanh trong 5 phút để khử mùi và giữ vị ngọt.',
+        'Bước 2 (Hấp/Luộc giữ chất): Hấp cách thủy hoặc luộc lửa vừa 10–12 phút cho chín mềm; rau củ luộc chín tới giữ màu xanh và chất xơ.',
+        'Bước 3 (Trình bày): Ăn kèm cơm gạo lứt/bánh tráng và nước chấm pha loãng, ưu tiên ăn rau và đạm trước tinh bột.',
+      ];
+    } else {
+      shopping.add('Gia vị: 1 muỗng cà phê dầu oliu/dầu cải, tỏi, tiêu đen, nước tương giảm muối');
+      cookMin = 22;
+      steps = [
+        'Bước 1 (Sơ chế & Ướp): Thái phần đạm vừa ăn, ướp với chút tiêu đen, tỏi băm và 1/2 muỗng nước tương giảm muối trong 10 phút.',
+        'Bước 2 (Áp chảo / Xào ít dầu): Làm nóng chảo chống dính với 1 muỗng nhỏ dầu thực vật, áp chảo/xào nhanh trên lửa vừa cho chín vàng đều.',
+        'Bước 3 (Canh & Rau ăn kèm): Nấu canh hoặc luộc rau củ thanh mát ít muối, dọn ăn cùng cơm theo đúng định lượng khẩu phần.',
+      ];
+    }
+
+    return {
+      'shopping_items': shopping,
+      'cooking_time_min': cookMin,
+      'recipe_steps': steps,
+    };
+  }
+
+  Map<String, dynamic>? _resolveLocalPool(String pref) {
+    final low = pref.trim().toLowerCase();
+    if (low.isEmpty) return null;
+    if (low.contains('gà')) return _localPrefPools['ga'];
+    if (low.contains('bò')) return _localPrefPools['bo'];
+    if (low.contains('heo') || low.contains('lợn') || low.contains('sườn')) {
+      return _localPrefPools['heo'];
+    }
+    if (low.contains('cá') || low.contains('tôm') || low.contains('hải sản')) {
+      return _localPrefPools['ca'];
+    }
+    if (low.contains('đậu') || low.contains('trứng') || low.contains('chay')) {
+      return _localPrefPools['chay'];
+    }
+    final label = pref.trim();
+    return {
+      'focus': 'Thực đơn tự chọn theo món bạn muốn: $label',
+      'breakfast': [
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Bún / Phở $label nấu thanh đạm + Rau sống', 'portion_g': 360, 'calories': 420, 'protein_g': 28, 'fat_g': 9, 'carbs_g': 54},
+        {'meal_type': 'Bữa sáng', 'name_vi': 'Cháo yến mạch $label + Hành ngò', 'portion_g': 340, 'calories': 395, 'protein_g': 26, 'fat_g': 8, 'carbs_g': 52},
+      ],
+      'lunch': [
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm gạo lứt + $label chế biến ít dầu + Bông cải xanh luộc', 'portion_g': 400, 'calories': 585, 'protein_g': 39, 'fat_g': 13, 'carbs_g': 73},
+        {'meal_type': 'Bữa trưa', 'name_vi': 'Cơm trắng vừa + $label rim/xào rau củ + Canh cải ngọt', 'portion_g': 400, 'calories': 595, 'protein_g': 38, 'fat_g': 14, 'carbs_g': 74},
+      ],
+      'dinner': [
+        {'meal_type': 'Bữa tối', 'name_vi': '$label hấp/áp chảo thanh nhẹ + Cơm gạo lứt + Canh bí xanh', 'portion_g': 370, 'calories': 490, 'protein_g': 35, 'fat_g': 10, 'carbs_g': 63},
+        {'meal_type': 'Bữa tối', 'name_vi': 'Salad / Gỏi cuốn $label rau tươi + Súp nấm', 'portion_g': 350, 'calories': 460, 'protein_g': 33, 'fat_g': 9, 'carbs_g': 58},
+      ],
+    };
+  }
+
+  void _applyLocalCustomizationForDay(int dayIdx, {int? singleMealIdxToSwap}) {
+    final days = (_plan?['days'] as List?) ?? [];
+    if (dayIdx < 0 || dayIdx >= days.length) return;
+    final currentDay = Map<String, dynamic>.from(days[dayIdx] as Map);
+    final pref = (_dayPreferences[dayIdx] ?? '').trim();
+    final seed = _dayVariationSeeds[dayIdx] ?? 0;
+
+    final pool =
+        _resolveLocalPool(pref) ??
+        _localPrefPools.values.elementAt((dayIdx + seed) % _localPrefPools.length);
+
+    final bList = pool['breakfast'] as List;
+    final lList = pool['lunch'] as List;
+    final dList = pool['dinner'] as List;
+    final oldMeals = ((currentDay['meals'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    List<Map<String, dynamic>> rawTemplates;
+    if (singleMealIdxToSwap != null && oldMeals.length >= 4) {
+      rawTemplates = List<Map<String, dynamic>>.from(oldMeals);
+      if (singleMealIdxToSwap == 0) {
+        rawTemplates[0] = Map<String, dynamic>.from(
+          bList[(dayIdx + seed) % bList.length] as Map,
+        );
+      } else if (singleMealIdxToSwap == 1) {
+        rawTemplates[1] = Map<String, dynamic>.from(
+          lList[(dayIdx + seed) % lList.length] as Map,
+        );
+      } else if (singleMealIdxToSwap == 2) {
+        rawTemplates[2] = Map<String, dynamic>.from(
+          dList[(dayIdx + seed) % dList.length] as Map,
+        );
+      }
+    } else {
+      final snackTpl = oldMeals.isNotEmpty
+          ? oldMeals.last
+          : {
+              'meal_type': 'Ăn phụ',
+              'name_vi': 'Táo xanh + Hạt hạnh nhân rang mộc',
+              'portion_g': 150,
+              'calories': 190,
+              'protein_g': 5,
+              'fat_g': 9,
+              'carbs_g': 22,
+            };
+      rawTemplates = [
+        Map<String, dynamic>.from(bList[(dayIdx + seed) % bList.length] as Map),
+        Map<String, dynamic>.from(lList[(dayIdx + seed) % lList.length] as Map),
+        Map<String, dynamic>.from(dList[(dayIdx + seed) % dList.length] as Map),
+        snackTpl,
+      ];
+    }
+
+    final goal = widget.dailyGoal.clamp(1200.0, 3500.0);
+    final baseKcal = rawTemplates.fold<double>(
+      0.0,
+      (s, m) => s + ((m['calories'] as num?)?.toDouble() ?? 400.0),
+    );
+    final scale = baseKcal > 0 ? (goal / baseKcal) : 1.0;
+
+    final newMeals = <Map<String, dynamic>>[];
+    double dayCal = 0, dayPro = 0, dayFat = 0, dayCarb = 0;
+
+    for (final m in rawTemplates) {
+      final c = (((m['calories'] as num?)?.toDouble() ?? 400) * scale).round();
+      final p = double.parse(
+        (((m['protein_g'] as num?)?.toDouble() ?? 25) * scale).toStringAsFixed(1),
+      );
+      final f = double.parse(
+        (((m['fat_g'] as num?)?.toDouble() ?? 10) * scale).toStringAsFixed(1),
+      );
+      final cb = double.parse(
+        (((m['carbs_g'] as num?)?.toDouble() ?? 55) * scale).toStringAsFixed(1),
+      );
+      final pg = math.max(
+        80,
+        ((((m['portion_g'] as num?)?.toDouble() ?? 350) * scale) / 10.0)
+                .round() *
+            10,
+      );
+      final nameVi = '${m['name_vi']}';
+      final extra = buildLocalRecipeAndShopping(nameVi, pg);
+
+      newMeals.add({
+        'meal_type': m['meal_type'],
+        'name_vi': nameVi,
+        'portion_g': pg,
+        'calories': c,
+        'protein_g': p,
+        'fat_g': f,
+        'carbs_g': cb,
+        'shopping_items': extra['shopping_items'],
+        'cooking_time_min': extra['cooking_time_min'],
+        'recipe_steps': extra['recipe_steps'],
+      });
+      dayCal += c;
+      dayPro += p;
+      dayFat += f;
+      dayCarb += cb;
+    }
+
+    currentDay['focus'] = pref.isNotEmpty
+        ? pool['focus']
+        : '${currentDay['focus']}';
+    currentDay['preference'] = pref.isNotEmpty ? pref : 'Linh hoạt';
+    currentDay['total_calories'] = dayCal.round();
+    currentDay['total_protein_g'] = double.parse(dayPro.toStringAsFixed(1));
+    currentDay['total_fat_g'] = double.parse(dayFat.toStringAsFixed(1));
+    currentDay['total_carbs_g'] = double.parse(dayCarb.toStringAsFixed(1));
+    currentDay['meals'] = newMeals;
+
+    setState(() {
+      days[dayIdx] = currentDay;
+    });
   }
 
   Future<void> _loadPlan() async {
@@ -668,15 +1063,40 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
       _error = null;
     });
     try {
+      final prefPayload = <String, String>{};
+      _dayPreferences.forEach((k, v) {
+        if (v.trim().isNotEmpty) prefPayload['$k'] = v.trim();
+      });
       final res = await http.post(
         Uri.parse('${AppConfig.baseUrl}/api/meal-plan/weekly'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'daily_goal': widget.dailyGoal}),
+        body: jsonEncode({
+          'daily_goal': widget.dailyGoal,
+          'day_preferences': prefPayload,
+        }),
       );
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       if (res.statusCode == 200 && body['status'] == 'ok') {
+        final rawPlan = body['plan'] as Map<String, dynamic>?;
+        final days = (rawPlan?['days'] as List?) ?? [];
+        for (final d in days) {
+          if (d is Map) {
+            final meals = (d['meals'] as List?) ?? [];
+            for (final m in meals) {
+              if (m is Map && m['shopping_items'] == null) {
+                final extra = buildLocalRecipeAndShopping(
+                  '${m['name_vi'] ?? ''}',
+                  (m['portion_g'] as num?)?.toInt() ?? 350,
+                );
+                m['shopping_items'] = extra['shopping_items'];
+                m['cooking_time_min'] = extra['cooking_time_min'];
+                m['recipe_steps'] = extra['recipe_steps'];
+              }
+            }
+          }
+        }
         setState(() {
-          _plan = body['plan'] as Map<String, dynamic>?;
+          _plan = rawPlan;
           _loading = false;
         });
       } else {
@@ -775,7 +1195,10 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                       onPressed: () {
                         showDialog<void>(
                           context: context,
-                          builder: (_) => _SmartGroceryListDialog(days: days),
+                          builder: (_) => _SmartGroceryListDialog(
+                            days: days,
+                            initialDayIndex: _selectedDay,
+                          ),
                         );
                       },
                       icon: const Icon(
@@ -783,7 +1206,7 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                         size: 16,
                       ),
                       label: const Text(
-                        'Đi chợ 7 ngày',
+                        'Đi chợ theo món',
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w800,
@@ -820,10 +1243,15 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                     children: List.generate(days.length, (i) {
                       final d = days[i];
                       final sel = i == _selectedDay;
+                      final prefTag = (_dayPreferences[i] ?? '').trim();
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          label: Text('${d['day']}'),
+                          label: Text(
+                            prefTag.isNotEmpty
+                                ? '${d['day']} · $prefTag'
+                                : '${d['day']}',
+                          ),
                           selected: sel,
                           selectedColor: primary,
                           labelStyle: TextStyle(
@@ -831,14 +1259,197 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                             fontWeight: FontWeight.w800,
                             fontSize: 12,
                           ),
-                          onSelected: (_) => setState(() => _selectedDay = i),
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedDay = i;
+                              _customPrefCtrl.text = _dayPreferences[i] ?? '';
+                            });
+                          },
                         ),
                       );
                     }),
                   ),
                 ),
                 if (currentDay != null) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+                  // Khung tu quyet dinh mon muon an cho ngay dang chon (Khong co dinh!)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.tune_rounded,
+                              size: 16,
+                              color: primaryDark,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${currentDay['day']} bạn muốn ăn gì? (AI tự soạn thực đơn & đi chợ)',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  color: accent,
+                                ),
+                              ),
+                            ),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                foregroundColor: primaryDark,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              onPressed: () {
+                                _dayVariationSeeds[_selectedDay] =
+                                    (_dayVariationSeeds[_selectedDay] ?? 0) + 1;
+                                _applyLocalCustomizationForDay(_selectedDay);
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 15),
+                              label: const Text(
+                                'Đổi thực đơn khác',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _prefOptions.map((opt) {
+                            final id = opt['id']!;
+                            final cur = (_dayPreferences[_selectedDay] ?? '')
+                                .trim();
+                            final selected = cur.toLowerCase() ==
+                                id.toLowerCase();
+                            return InkWell(
+                              onTap: () {
+                                _dayPreferences[_selectedDay] = id;
+                                _customPrefCtrl.text = id;
+                                _dayVariationSeeds[_selectedDay] =
+                                    (_dayVariationSeeds[_selectedDay] ?? 0) + 1;
+                                _applyLocalCustomizationForDay(_selectedDay);
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? primary
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: selected
+                                        ? primary
+                                        : const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: Text(
+                                  opt['label']!,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: selected ? Colors.white : accent,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 38,
+                                child: TextField(
+                                  controller: _customPrefCtrl,
+                                  style: const TextStyle(fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'Hoặc tự gõ món/nguyên liệu (VD: sườn non, vịt, cá hồi...)',
+                                    hintStyle: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF94A3B8),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                  ),
+                                  onSubmitted: (val) {
+                                    _dayPreferences[_selectedDay] = val.trim();
+                                    _dayVariationSeeds[_selectedDay] =
+                                        (_dayVariationSeeds[_selectedDay] ??
+                                            0) +
+                                        1;
+                                    _applyLocalCustomizationForDay(
+                                      _selectedDay,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 38,
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: primaryDark,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  _dayPreferences[_selectedDay] =
+                                      _customPrefCtrl.text.trim();
+                                  _dayVariationSeeds[_selectedDay] =
+                                      (_dayVariationSeeds[_selectedDay] ?? 0) +
+                                      1;
+                                  _applyLocalCustomizationForDay(_selectedDay);
+                                },
+                                child: const Text(
+                                  'Soạn món',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -883,7 +1494,26 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...meals.map((m) {
+                  ...List.generate(meals.length, (mIdx) {
+                    final m = Map<String, dynamic>.from(meals[mIdx] as Map);
+                    final recKey = '$_selectedDay-$mIdx';
+                    final isExpanded = _expandedRecipeKeys.contains(recKey);
+                    final extra = m['shopping_items'] != null
+                        ? m
+                        : buildLocalRecipeAndShopping(
+                            '${m['name_vi'] ?? ''}',
+                            (m['portion_g'] as num?)?.toInt() ?? 350,
+                          );
+                    final shoppingList =
+                        ((extra['shopping_items'] as List?) ?? [])
+                            .map((e) => '$e')
+                            .toList();
+                    final recipeSteps =
+                        ((extra['recipe_steps'] as List?) ?? [])
+                            .map((e) => '$e')
+                            .toList();
+                    final cookMin = extra['cooking_time_min'] ?? 18;
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
@@ -892,47 +1522,210 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${m['meal_type']}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${m['meal_type']}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: primaryDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${m['name_vi']}',
+                                      style: const TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: accent,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '~${m['portion_g']}g · ${m['calories']} kcal (P: ${m['protein_g']}g · F: ${m['fat_g']}g · C: ${m['carbs_g']}g)',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (mIdx < 3)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Đổi món khác cho bữa này',
+                                  color: const Color(0xFF0284C7),
+                                  onPressed: () {
+                                    _dayVariationSeeds[_selectedDay] =
+                                        (_dayVariationSeeds[_selectedDay] ??
+                                            0) +
+                                        1;
+                                    _applyLocalCustomizationForDay(
+                                      _selectedDay,
+                                      singleMealIdxToSwap: mIdx,
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.autorenew_rounded,
+                                    size: 20,
+                                  ),
+                                ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Ghi món này vào nhật ký hôm nay',
+                                color: primary,
+                                onPressed: () => _logMeal(m),
+                                icon: const Icon(Icons.add_circle_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              setState(() {
+                                if (isExpanded) {
+                                  _expandedRecipeKeys.remove(recKey);
+                                } else {
+                                  _expandedRecipeKeys.add(recKey);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isExpanded
+                                    ? const Color(0xFFECFDF5)
+                                    : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isExpanded
+                                      ? const Color(0xFFA7F3D0)
+                                      : const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.menu_book_rounded,
+                                    size: 15,
                                     color: primaryDark,
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${m['name_vi']}',
-                                  style: const TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: accent,
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      isExpanded
+                                          ? 'Ẩn nguyên liệu đi chợ & công thức nấu'
+                                          : '🛒 Xem nguyên liệu đi chợ (${shoppingList.length} món) & 👩‍🍳 Công thức nấu (~${cookMin}p)',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: primaryDark,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  '~${m['portion_g']}g · ${m['calories']} kcal (P: ${m['protein_g']}g · F: ${m['fat_g']}g · C: ${m['carbs_g']}g)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF64748B),
+                                  Icon(
+                                    isExpanded
+                                        ? Icons.keyboard_arrow_up_rounded
+                                        : Icons.keyboard_arrow_down_rounded,
+                                    size: 18,
+                                    color: primaryDark,
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                          IconButton(
-                            tooltip: 'Ghi món này vào nhật ký hôm nay',
-                            color: primary,
-                            onPressed: () =>
-                                _logMeal(Map<String, dynamic>.from(m)),
-                            icon: const Icon(Icons.add_circle_rounded),
-                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '🛒 Nguyên liệu cần mua cho món này:',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: accent,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  ...shoppingList.map(
+                                    (item) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 3),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            '• ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              color: primaryDark,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              item,
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: Color(0xFF334155),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '👩‍🍳 Công thức chế biến (~$cookMin phút):',
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: primaryDark,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  ...recipeSteps.map(
+                                    (step) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        step,
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          height: 1.35,
+                                          color: Color(0xFF334155),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     );
@@ -2076,8 +2869,12 @@ class _WeeklyBadgesCard extends StatelessWidget {
 
 class _SmartGroceryListDialog extends StatefulWidget {
   final List<dynamic> days;
+  final int initialDayIndex;
 
-  const _SmartGroceryListDialog({required this.days});
+  const _SmartGroceryListDialog({
+    required this.days,
+    this.initialDayIndex = 0,
+  });
 
   @override
   State<_SmartGroceryListDialog> createState() =>
@@ -2086,53 +2883,95 @@ class _SmartGroceryListDialog extends StatefulWidget {
 
 class _SmartGroceryListDialogState extends State<_SmartGroceryListDialog> {
   final Set<String> _checked = {};
-
-  late final Map<String, List<String>> _categories = _buildCategories();
+  bool _onlySelectedDay = true;
 
   Map<String, List<String>> _buildCategories() {
-    final dishNames = <String>[];
-    for (final d in widget.days) {
-      if (d is Map) {
-        final meals = (d['meals'] as List?) ?? [];
-        for (final m in meals) {
-          if (m is Map && m['name_vi'] != null) {
-            dishNames.add('${m['name_vi']}');
+    final targetDays = _onlySelectedDay &&
+            widget.days.isNotEmpty &&
+            widget.initialDayIndex < widget.days.length
+        ? [widget.days[widget.initialDayIndex]]
+        : widget.days;
+
+    final proteinItems = <String>[];
+    final veggieItems = <String>[];
+    final carbItems = <String>[];
+    final spiceItems = <String>[];
+
+    for (final d in targetDays) {
+      if (d is! Map) continue;
+      final dayName = '${d['day'] ?? ''}';
+      final meals = (d['meals'] as List?) ?? [];
+      for (final rawM in meals) {
+        if (rawM is! Map) continue;
+        final dishName = '${rawM['name_vi'] ?? 'Món ăn'}';
+        final portionG = (rawM['portion_g'] as num?)?.toInt() ?? 350;
+        final rawShop = rawM['shopping_items'] as List?;
+        final shopList = rawShop != null
+            ? rawShop.map((e) => '$e').toList()
+            : (_WeeklyMealPlanSheetState.buildLocalRecipeAndShopping(
+                    dishName,
+                    portionG,
+                  )['shopping_items'] as List)
+                .map((e) => '$e')
+                .toList();
+
+        final tag = _onlySelectedDay
+            ? '($dishName)'
+            : '($dayName · ${dishName.split('+').first.trim()})';
+
+        for (final item in shopList) {
+          final low = item.toLowerCase();
+          final entry = '$item $tag';
+          if (low.contains('gia vị')) {
+            if (spiceItems.length < 12 && !spiceItems.contains(item)) {
+              spiceItems.add(item);
+            }
+          } else if (low.contains('gà') ||
+              low.contains('bò') ||
+              low.contains('heo') ||
+              low.contains('sườn') ||
+              low.contains('cá') ||
+              low.contains('tôm') ||
+              low.contains('trứng') ||
+              low.contains('đậu hũ')) {
+            proteinItems.add(entry);
+          } else if (low.contains('gạo') ||
+              low.contains('bún') ||
+              low.contains('phở') ||
+              low.contains('miến') ||
+              low.contains('hủ tiếu') ||
+              low.contains('khoai') ||
+              low.contains('yến mạch') ||
+              low.contains('bánh')) {
+            carbItems.add(entry);
+          } else {
+            veggieItems.add(entry);
           }
         }
       }
     }
 
     return {
-      '🥩 Thịt, Cá, Trứng & Đạm (Cho ${dishNames.length} bữa tuần này)': [
-        'Ức gà / Thịt gà phi lê: 800g',
-        'Thịt bò thăn / bắp bò: 600g',
-        'Cá tươi (Cá hồi / Cá lóc / Cá diêu hồng): 700g',
-        'Trứng gà ta: 10 quả',
-        'Đậu hũ trắng / Đậu hũ non: 4 bìa',
-      ],
-      '🥬 Rau củ & Trái cây tươi': [
-        'Bông cải xanh & Cải thìa: 1 kg',
-        'Rau muống / Rau mồng tơi / Xà lách: 1.2 kg',
-        'Cà chua, Dưa leo & Cà rốt: 800g',
-        'Trái cây ít ngọt (Táo, Ổi, Bưởi, Chuối): 1.5 kg',
-      ],
-      '🌾 Tinh bột tốt & Ngũ cốc': [
-        'Gạo lứt / Gạo trắng nấu cơm: 1.5 kg',
-        'Khoai lang mật / Khoai lang tím: 1 kg',
-        'Yến mạch cán dẹt & Bánh mì nguyên cám: 1 gói',
-        'Bún tươi / Bánh phở tươi: 800g',
-      ],
-      '🥛 Sữa, Hạt & Gia vị lành mạnh': [
-        'Sữa chua không đường / Ít đường: 1 lốc (4 hộp)',
-        'Hạt dinh dưỡng (Hạnh nhân, Óc chó, Đậu phộng): 200g',
-        'Dầu oliu / Dầu thực vật, Hành tỏi, Gừng, Chanh',
-      ],
+      if (proteinItems.isNotEmpty)
+        '🥩 Thịt, Cá, Trứng & Đạm theo món đã chọn': proteinItems,
+      if (veggieItems.isNotEmpty)
+        '🥬 Rau củ, Nấm & Trái cây tươi': veggieItems,
+      if (carbItems.isNotEmpty)
+        '🌾 Gạo, Bún, Phở & Tinh bột tốt': carbItems,
+      if (spiceItems.isNotEmpty)
+        '🧂 Gia vị cần chuẩn bị': spiceItems,
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    final allItems = _categories.values.expand((e) => e).toList();
+    final categories = _buildCategories();
+    final allItems = categories.values.expand((e) => e).toList();
+    final curDayName = widget.days.isNotEmpty &&
+            widget.initialDayIndex < widget.days.length
+        ? '${(widget.days[widget.initialDayIndex] as Map)['day']}'
+        : 'Hôm nay';
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Row(
@@ -2141,8 +2980,8 @@ class _SmartGroceryListDialogState extends State<_SmartGroceryListDialog> {
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'Danh Sách Đi Chợ 7 Ngày',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              'Danh Sách Đi Chợ Theo Thực Đơn',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5),
             ),
           ),
           Container(
@@ -2167,7 +3006,42 @@ class _SmartGroceryListDialogState extends State<_SmartGroceryListDialog> {
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: _categories.entries.map((entry) {
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      label: Text('📅 Riêng $curDayName'),
+                      selected: _onlySelectedDay,
+                      selectedColor: primary,
+                      labelStyle: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: _onlySelectedDay ? Colors.white : accent,
+                      ),
+                      onSelected: (_) =>
+                          setState(() => _onlySelectedDay = true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Text('🗓️ Gộp cả 7 ngày'),
+                      selected: !_onlySelectedDay,
+                      selectedColor: primary,
+                      labelStyle: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: !_onlySelectedDay ? Colors.white : accent,
+                      ),
+                      onSelected: (_) =>
+                          setState(() => _onlySelectedDay = false),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ...categories.entries.map((entry) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Column(
@@ -2223,8 +3097,9 @@ class _SmartGroceryListDialogState extends State<_SmartGroceryListDialog> {
       actions: [
         TextButton.icon(
           onPressed: () async {
-            final buf = StringBuffer('🛒 DANH SÁCH ĐI CHỢ 7 NGÀY (FOODSCAN AI)\n');
-            for (final e in _categories.entries) {
+            final categories = _buildCategories();
+            final buf = StringBuffer('🛒 DANH SÁCH ĐI CHỢ THEO THỰC ĐƠN (FOODSCAN AI)\n');
+            for (final e in categories.entries) {
               buf.writeln('\n${e.key}:');
               for (final item in e.value) {
                 final mark = _checked.contains(item) ? '[x]' : '[ ]';

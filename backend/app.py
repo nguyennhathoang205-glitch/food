@@ -2501,9 +2501,13 @@ def weekly_meal_plan_endpoint():
         daily_goal = 2000
 
     health_profile = health_rules.load_profile(user_key)
+    day_preferences = payload.get("day_preferences") if isinstance(payload.get("day_preferences"), dict) else {}
+    variation_seed = int(number_or_zero(payload.get("variation_seed")))
     plan = health_rules.generate_weekly_meal_plan(
         daily_goal=daily_goal,
         profile=health_profile,
+        day_preferences=day_preferences,
+        variation_seed=variation_seed,
     )
     return jsonify({
         "status": "ok",

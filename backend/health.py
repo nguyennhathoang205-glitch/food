@@ -960,10 +960,260 @@ _SAFE_REPLACEMENTS = [
     {"name_vi": "Bún gạo lứt ức gà xé + Rau luộc thập cẩm", "portion_g": 350, "calories": 440, "protein_g": 32, "fat_g": 7, "carbs_g": 61},
 ]
 
+# Kho mon an linh hoat theo nhom nguyen lieu nguoi dung tu chon cho tung ngay
+_PREFERENCE_MEAL_POOLS = {
+    "ga": {
+        "focus": "Thực đơn Thịt Gà giàu đạm nạc, ít béo bão hòa",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": "Phở gà ta ít bánh (bỏ da) + Giá trụng", "portion_g": 360, "calories": 420, "protein_g": 30, "fat_g": 8, "carbs_g": 54},
+            {"meal_type": "Bữa sáng", "name_vi": "Miến gà nấu nấm hương + Rau thơm", "portion_g": 350, "calories": 395, "protein_g": 28, "fat_g": 7, "carbs_g": 52},
+            {"meal_type": "Bữa sáng", "name_vi": "Cháo yến mạch ức gà xé + Hành ngò", "portion_g": 330, "calories": 380, "protein_g": 27, "fat_g": 7, "carbs_g": 50},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm gạo lứt + Ức gà áp chảo sốt tiêu đen + Bông cải xanh luộc", "portion_g": 400, "calories": 580, "protein_g": 42, "fat_g": 12, "carbs_g": 72},
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm trắng vừa + Gà kho gừng sả ít muối + Canh cải ngọt", "portion_g": 400, "calories": 590, "protein_g": 40, "fat_g": 13, "carbs_g": 74},
+            {"meal_type": "Bữa trưa", "name_vi": "Bún gạo lứt gà nướng mật ong + Salad dưa leo cà chua", "portion_g": 390, "calories": 560, "protein_g": 39, "fat_g": 11, "carbs_g": 70},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": "Ức gà hấp lá chanh + Cơm gạo lứt + Bí xanh luộc", "portion_g": 370, "calories": 490, "protein_g": 38, "fat_g": 8, "carbs_g": 64},
+            {"meal_type": "Bữa tối", "name_vi": "Gỏi cuốn ức gà rau củ (3 cuốn) + Canh nấm đậu hũ", "portion_g": 340, "calories": 450, "protein_g": 34, "fat_g": 8, "carbs_g": 58},
+            {"meal_type": "Bữa tối", "name_vi": "Salad ức gà áp chảo + Khoai lang hấp + Súp bí đỏ", "portion_g": 350, "calories": 465, "protein_g": 36, "fat_g": 9, "carbs_g": 56},
+        ],
+    },
+    "bo": {
+        "focus": "Thực đơn Thịt Bò bổ máu, giàu Sắt & Kẽm",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": "Phở bò thăn trần nước trong + Nhiều hành giá", "portion_g": 380, "calories": 440, "protein_g": 31, "fat_g": 10, "carbs_g": 55},
+            {"meal_type": "Bữa sáng", "name_vi": "Bún bò thăn nạc ít mỡ + Rau sống", "portion_g": 380, "calories": 455, "protein_g": 30, "fat_g": 11, "carbs_g": 56},
+            {"meal_type": "Bữa sáng", "name_vi": "Bánh mì nguyên cám kẹp bò áp chảo & xà lách", "portion_g": 260, "calories": 415, "protein_g": 27, "fat_g": 11, "carbs_g": 50},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm gạo lứt + Thịt bò xào bông cải xanh + Canh bí đao", "portion_g": 410, "calories": 600, "protein_g": 41, "fat_g": 14, "carbs_g": 73},
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm trắng vừa + Bò lúc lắc ớt chuông + Salad rau mầm", "portion_g": 400, "calories": 610, "protein_g": 40, "fat_g": 15, "carbs_g": 74},
+            {"meal_type": "Bữa trưa", "name_vi": "Bún thịt bò xào sả ớt ít dầu + Dưa leo & rau thơm", "portion_g": 390, "calories": 575, "protein_g": 37, "fat_g": 13, "carbs_g": 72},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": "Thịt bò thăn cuộn nấm kim châm áp chảo + Cơm gạo lứt + Rau luộc", "portion_g": 370, "calories": 500, "protein_g": 36, "fat_g": 12, "carbs_g": 62},
+            {"meal_type": "Bữa tối", "name_vi": "Canh cải bò băm nấu gừng + Đậu hũ non hấp + 1 chén cơm nhỏ", "portion_g": 360, "calories": 475, "protein_g": 33, "fat_g": 10, "carbs_g": 60},
+            {"meal_type": "Bữa tối", "name_vi": "Salad bò nướng kiểu Việt + Khoai lang mật hấp", "portion_g": 350, "calories": 485, "protein_g": 35, "fat_g": 11, "carbs_g": 58},
+        ],
+    },
+    "heo": {
+        "focus": "Thực đơn Thịt Heo Nạc cân bằng, đậm vị cơm nhà",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": "Bún mọc thịt nạc heo + Rau sống", "portion_g": 360, "calories": 425, "protein_g": 26, "fat_g": 10, "carbs_g": 56},
+            {"meal_type": "Bữa sáng", "name_vi": "Hủ tiếu thịt heo nạc nước trong + Giá hẹ", "portion_g": 370, "calories": 420, "protein_g": 27, "fat_g": 9, "carbs_g": 57},
+            {"meal_type": "Bữa sáng", "name_vi": "Bánh cuốn nhân thịt heo nạc băm & mộc nhĩ", "portion_g": 300, "calories": 405, "protein_g": 23, "fat_g": 9, "carbs_g": 56},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm trắng vừa + Thịt thăn heo luộc cuốn rau sống + Canh bí xanh", "portion_g": 400, "calories": 585, "protein_g": 38, "fat_g": 13, "carbs_g": 75},
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm gạo lứt + Sườn heo non rim nhạt + Đậu cô ve luộc", "portion_g": 400, "calories": 605, "protein_g": 37, "fat_g": 15, "carbs_g": 74},
+            {"meal_type": "Bữa trưa", "name_vi": "Bún thịt heo nướng nạc ít mỡ + Đồ chua & rau thơm", "portion_g": 380, "calories": 565, "protein_g": 34, "fat_g": 13, "carbs_g": 72},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": "Thịt thăn heo áp chảo sả + Cơm gạo lứt + Canh mồng tơi", "portion_g": 370, "calories": 495, "protein_g": 35, "fat_g": 11, "carbs_g": 64},
+            {"meal_type": "Bữa tối", "name_vi": "Canh bí đỏ nấu thịt heo băm + Đậu phụ luộc + 1 chén cơm", "portion_g": 360, "calories": 480, "protein_g": 28, "fat_g": 11, "carbs_g": 66},
+            {"meal_type": "Bữa tối", "name_vi": "Bắp cải cuộn thịt nạc heo hấp gừng + Cơm gạo lứt", "portion_g": 360, "calories": 470, "protein_g": 32, "fat_g": 9, "carbs_g": 62},
+        ],
+    },
+    "ca": {
+        "focus": "Thực đơn Cá giàu Omega-3, tốt cho tim mạch",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": "Bún cá lóc hấp nghệ + Rau cần & giá đỗ", "portion_g": 360, "calories": 410, "protein_g": 28, "fat_g": 8, "carbs_g": 54},
+            {"meal_type": "Bữa sáng", "name_vi": "Cháo cá diêu hồng nấu gừng + Hành ngò", "portion_g": 350, "calories": 385, "protein_g": 26, "fat_g": 7, "carbs_g": 52},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm gạo lứt + Cá hồi áp chảo + Salad dưa leo cà chua", "portion_g": 390, "calories": 605, "protein_g": 40, "fat_g": 17, "carbs_g": 68},
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm trắng vừa + Cá basa kho nghệ ít muối + Canh rau ngót", "portion_g": 400, "calories": 580, "protein_g": 37, "fat_g": 14, "carbs_g": 73},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": "Cá diêu hồng hấp gừng hành + Canh cải ngọt + 1 chén cơm nhỏ", "portion_g": 380, "calories": 495, "protein_g": 36, "fat_g": 10, "carbs_g": 62},
+            {"meal_type": "Bữa tối", "name_vi": "Cá lóc hấp bầu + Cơm gạo lứt + Rau củ luộc", "portion_g": 370, "calories": 485, "protein_g": 35, "fat_g": 9, "carbs_g": 64},
+        ],
+    },
+    "chay": {
+        "focus": "Thực đơn Đậu Hũ, Trứng & Rau Củ thanh đạm, nhẹ bụng",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": "Khoai lang hấp + 2 quả trứng gà luộc + Sữa hạt", "portion_g": 300, "calories": 395, "protein_g": 19, "fat_g": 11, "carbs_g": 53},
+            {"meal_type": "Bữa sáng", "name_vi": "Bún riêu đậu hũ nấm tươi thanh đạm + Rau sống", "portion_g": 360, "calories": 400, "protein_g": 21, "fat_g": 9, "carbs_g": 56},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm gạo lứt + Đậu hũ sốt nấm đông cô + Bông cải xanh luộc", "portion_g": 390, "calories": 540, "protein_g": 28, "fat_g": 12, "carbs_g": 74},
+            {"meal_type": "Bữa trưa", "name_vi": "Cơm trắng vừa + Trứng cuộn rau củ + Canh nấm hạt sen", "portion_g": 380, "calories": 555, "protein_g": 29, "fat_g": 14, "carbs_g": 72},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": "Đậu hũ non hấp tương gừng + Rau muống luộc + Cơm gạo lứt", "portion_g": 360, "calories": 465, "protein_g": 25, "fat_g": 10, "carbs_g": 66},
+            {"meal_type": "Bữa tối", "name_vi": "Miến trộn nấm hương đậu phụ & rau củ thập cẩm", "portion_g": 350, "calories": 450, "protein_g": 24, "fat_g": 9, "carbs_g": 65},
+        ],
+    },
+}
 
-def generate_weekly_meal_plan(daily_goal=2000, profile=None):
-    """Tao thuc don 7 ngay ca nhan hoa theo TDEE (daily_goal), di ung, benh ly va don thuoc."""
+
+def build_recipe_and_shopping_for_meal(name_vi, portion_g=350):
+    """Sinh danh sach nguyen lieu can mua (di cho) va cong thuc nau 3 buoc cho tung mon an."""
+    low = (name_vi or "").lower()
+    scale = max(0.7, min(float(portion_g or 350) / 360.0, 1.8))
+
+    def g(val):
+        return int(round((val * scale) / 5.0) * 5)
+
+    shopping = []
+    steps = []
+    cook_min = 18
+
+    # 1. Nguyen lieu dam chinh
+    if "gà" in low:
+        shopping.append(f"Ức gà / Thịt gà ta lọc da: {g(160)}g")
+    elif "bò" in low:
+        shopping.append(f"Thịt bò thăn / bắp bò tươi: {g(150)}g")
+    elif "sườn" in low:
+        shopping.append(f"Sườn heo non nhiều nạc: {g(160)}g")
+    elif any(k in low for k in ("heo", "lợn", "thịt thăn", "thịt băm", "thịt nướng", "mọc")):
+        shopping.append(f"Thịt thăn heo nạc / mọc heo: {g(150)}g")
+    elif "cá hồi" in low:
+        shopping.append(f"Cá hồi phi lê tươi: {g(150)}g")
+    elif "cá" in low:
+        shopping.append(f"Cá tươi phi lê (cá lóc / diêu hồng / basa): {g(160)}g")
+    elif "trứng" in low:
+        shopping.append("Trứng gà ta tươi: 2 quả")
+    elif "đậu hũ" in low or "đậu phụ" in low:
+        shopping.append(f"Đậu hũ non / đậu phụ trắng: {g(180)}g")
+
+    if "đậu hũ" in low and not any("Đậu hũ" in x for x in shopping):
+        shopping.append(f"Đậu hũ trắng: {g(120)}g")
+    if "nấm" in low:
+        shopping.append(f"Nấm hương / nấm đông cô / nấm kim châm: {g(80)}g")
+
+    # 2. Tinh bot / Nen mon
+    if "gạo lứt" in low:
+        shopping.append(f"Gạo lứt dẻo: {g(90)}g (nấu thành ~{g(190)}g cơm)")
+    elif "cơm" in low:
+        shopping.append(f"Gạo trắng thơm: {g(90)}g (nấu thành ~{g(190)}g cơm)")
+    elif "phở" in low:
+        shopping.append(f"Bánh phở tươi: {g(140)}g")
+    elif "bún" in low:
+        shopping.append(f"Bún tươi sợi nhỏ: {g(150)}g")
+    elif "miến" in low:
+        shopping.append(f"Miến dong khô: {g(65)}g")
+    elif "hủ tiếu" in low:
+        shopping.append(f"Sợi hủ tiếu dai: {g(140)}g")
+    elif "khoai lang" in low:
+        shopping.append(f"Khoai lang mật / khoai lang tím: {g(180)}g")
+    elif "yến mạch" in low:
+        shopping.append(f"Yến mạch cán dẹt: {g(65)}g")
+    elif "bánh mì" in low:
+        shopping.append("Bánh mì nguyên cám / bánh mì giòn: 1 ổ")
+    elif "gỏi cuốn" in low or "bánh cuốn" in low:
+        shopping.append(f"Bánh tráng gạo / bột bánh cuốn & bún tươi: {g(120)}g")
+
+    # 3. Rau cu & Trai cay
+    if "bông cải" in low:
+        shopping.append(f"Bông cải xanh (súp lơ): {g(130)}g")
+    elif "bí đỏ" in low:
+        shopping.append(f"Bí đỏ tươi: {g(140)}g")
+    elif "bí xanh" in low or "bí đao" in low:
+        shopping.append(f"Bí xanh (bí đao): {g(140)}g")
+    elif "bầu" in low:
+        shopping.append(f"Bầu non tươi: {g(140)}g")
+    elif "rau muống" in low:
+        shopping.append(f"Rau muống tươi: {g(150)}g")
+    elif "mồng tơi" in low:
+        shopping.append(f"Rau mồng tơi & mướp hương: {g(140)}g")
+    elif "cải" in low:
+        shopping.append(f"Rau cải ngọt / cải thìa tươi: {g(140)}g")
+    elif "rau ngót" in low:
+        shopping.append(f"Rau ngót tươi: {g(130)}g")
+    elif "đậu cô ve" in low:
+        shopping.append(f"Đậu cô ve tươi: {g(130)}g")
+    elif any(k in low for k in ("táo", "ổi", "thanh long", "lê", "đu đủ", "việt quất", "dâu")):
+        shopping.append(f"Trái cây tươi ({name_vi.split('+')[0].strip()}): {g(160)}g")
+        if "hạt" in low:
+            shopping.append(f"Hạt dinh dưỡng (hạnh nhân / óc chó rang mộc): {g(25)}g")
+        cook_min = 5
+    else:
+        shopping.append(f"Rau xanh, giá đỗ, dưa leo & hành ngò: {g(120)}g")
+
+    # 4. Gia vi & Cong thuc nau
+    if cook_min == 5:
+        steps = [
+            f"Bước 1 (Sơ chế): Rửa sạch trái cây với nước muối loãng, để ráo và cắt miếng vừa ăn (~{portion_g}g).",
+            "Bước 2 (Kết hợp): Dùng kèm hạt rang mộc không tẩm muối/đường để bổ sung chất béo tốt giúp no lâu.",
+            "Bước 3 (Thưởng thức): Ăn cách bữa chính 2–3 tiếng giúp ổn định đường huyết và nạp vitamin tự nhiên.",
+        ]
+    elif any(k in low for k in ("phở", "bún", "miến", "hủ tiếu", "cháo")):
+        shopping.append("Gia vị nấu: Gừng nướng, hành tím, sả, hành ngò, chanh & nước mắm nhạt")
+        cook_min = 20
+        steps = [
+            "Bước 1 (Sơ chế): Rửa sạch nguyên liệu đạm và rau; trụng nhanh bún/phở/miến qua nước sôi cho mềm sạch.",
+            "Bước 2 (Nấu nước dùng/cháo): Đun nước dùng trong với gừng nướng và hành tím, cho thịt/cá vào chín tới, nêm nhạt dưới 1/2 muỗng cà phê muối.",
+            "Bước 3 (Hoàn thiện): Xếp phần tinh bột và đạm vào tô, thêm nhiều rau xanh/giá trụng và hành ngò, hạn chế váng mỡ.",
+        ]
+    elif any(k in low for k in ("hấp", "luộc", "cuốn")):
+        shopping.append("Gia vị: Gừng tươi, lá chanh/sả, tỏi, nước chấm pha nhạt")
+        cook_min = 18
+        steps = [
+            "Bước 1 (Sơ chế): Làm sạch phần đạm chính, ướp nhẹ với gừng thái sợi, sả hoặc lá chanh trong 5 phút để khử mùi và giữ vị ngọt.",
+            "Bước 2 (Hấp/Luộc giữ chất): Hấp cách thủy hoặc luộc lửa vừa 10–12 phút cho chín mềm; rau củ luộc chín tới giữ màu xanh và chất xơ.",
+            "Bước 3 (Trình bày): Ăn kèm cơm gạo lứt/bánh tráng và nước chấm pha loãng, ưu tiên ăn rau và đạm trước tinh bột.",
+        ]
+    else:
+        shopping.append("Gia vị: 1 muỗng cà phê dầu oliu/dầu cải, tỏi, tiêu đen, nước tương giảm muối")
+        cook_min = 22
+        steps = [
+            "Bước 1 (Sơ chế & Ướp): Thái phần đạm vừa ăn, ướp với chút tiêu đen, tỏi băm và 1/2 muỗng nước tương giảm muối trong 10 phút.",
+            "Bước 2 (Áp chảo / Xào ít dầu): Làm nóng chảo chống dính với 1 muỗng nhỏ dầu thực vật, áp chảo/xào nhanh trên lửa vừa cho chín vàng đều.",
+            "Bước 3 (Canh & Rau ăn kèm): Nấu canh hoặc luộc rau củ thanh mát ít muối, dọn ăn cùng cơm theo đúng định lượng khẩu phần.",
+        ]
+
+    return {
+        "shopping_items": shopping,
+        "cooking_time_min": cook_min,
+        "recipe_steps": steps,
+    }
+
+
+def _match_preference_pool(pref_text):
+    low = _norm(pref_text or "")
+    if not low or low in ("linh hoạt", "mac dinh", "default", "all"):
+        return None
+    if any(k in low for k in ("gà", "ga", "ức gà", "chicken")):
+        return _PREFERENCE_MEAL_POOLS["ga"]
+    if any(k in low for k in ("bò", "bo", "beef")):
+        return _PREFERENCE_MEAL_POOLS["bo"]
+    if any(k in low for k in ("heo", "lợn", "sườn", "pork", "thịt")):
+        return _PREFERENCE_MEAL_POOLS["heo"]
+    if any(k in low for k in ("cá", "ca", "hải sản", "tôm", "fish")):
+        return _PREFERENCE_MEAL_POOLS["ca"]
+    if any(k in low for k in ("chay", "đậu", "trứng", "rau", "thanh đạm")):
+        return _PREFERENCE_MEAL_POOLS["chay"]
+    # Neu nguoi dung tu go 1 mon bat ky (vd: "vịt", "lươn", "nấm tràm"...)
+    custom_label = pref_text.strip()
+    return {
+        "focus": f"Thực đơn tự chọn theo món bạn muốn: {custom_label}",
+        "breakfast": [
+            {"meal_type": "Bữa sáng", "name_vi": f"Bún / Phở {custom_label} nấu thanh đạm + Rau sống", "portion_g": 360, "calories": 420, "protein_g": 28, "fat_g": 9, "carbs_g": 54},
+            {"meal_type": "Bữa sáng", "name_vi": f"Cháo yến mạch {custom_label} + Hành ngò", "portion_g": 340, "calories": 395, "protein_g": 26, "fat_g": 8, "carbs_g": 52},
+        ],
+        "lunch": [
+            {"meal_type": "Bữa trưa", "name_vi": f"Cơm gạo lứt + {custom_label} chế biến ít dầu + Bông cải xanh luộc", "portion_g": 400, "calories": 585, "protein_g": 39, "fat_g": 13, "carbs_g": 73},
+            {"meal_type": "Bữa trưa", "name_vi": f"Cơm trắng vừa + {custom_label} rim/xào rau củ + Canh cải ngọt", "portion_g": 400, "calories": 595, "protein_g": 38, "fat_g": 14, "carbs_g": 74},
+        ],
+        "dinner": [
+            {"meal_type": "Bữa tối", "name_vi": f"{custom_label} hấp/áp chảo thanh nhẹ + Cơm gạo lứt + Canh bí xanh", "portion_g": 370, "calories": 490, "protein_g": 35, "fat_g": 10, "carbs_g": 63},
+            {"meal_type": "Bữa tối", "name_vi": f"Salad / Gỏi cuốn {custom_label} rau tươi + Súp nấm", "portion_g": 350, "calories": 460, "protein_g": 33, "fat_g": 9, "carbs_g": 58},
+        ],
+    }
+
+
+def generate_weekly_meal_plan(daily_goal=2000, profile=None, day_preferences=None, variation_seed=0):
+    """Tao thuc don 7 ngay LINH HOAT theo TDEE (daily_goal), so thich tung ngay (day_preferences),
+    di ung, benh ly, kem danh sach di cho va cong thuc nau cho tung mon."""
     profile = profile or {"allergies": [], "conditions": [], "medications": []}
+    day_preferences = day_preferences if isinstance(day_preferences, dict) else {}
+    try:
+        seed = int(variation_seed or 0)
+    except Exception:
+        seed = 0
     try:
         goal = float(daily_goal or 2000)
     except Exception:
@@ -977,21 +1227,45 @@ def generate_weekly_meal_plan(daily_goal=2000, profile=None):
     days_out = []
     rep_idx = 0
 
-    for day_tpl in _BASE_7DAY_TEMPLATE:
+    for day_idx, day_tpl in enumerate(_BASE_7DAY_TEMPLATE):
+        pref_raw = str(day_preferences.get(str(day_idx)) or day_preferences.get(day_tpl["day"]) or "").strip()
+        pool = _match_preference_pool(pref_raw)
+        day_focus = pool["focus"] if pool else day_tpl["focus"]
+
+        if pool:
+            b_list = pool["breakfast"]
+            l_list = pool["lunch"]
+            d_list = pool["dinner"]
+            snack_tpl = day_tpl["meals"][-1]
+            tpl_meals = [
+                b_list[(day_idx + seed) % len(b_list)],
+                l_list[(day_idx + seed) % len(l_list)],
+                d_list[(day_idx + seed) % len(d_list)],
+                snack_tpl,
+            ]
+        elif seed > 0:
+            # Khi nguoi dung bam "Doi thuc don khac", xoay vong thuc don giua cac ngay
+            shifted = _BASE_7DAY_TEMPLATE[(day_idx + seed) % len(_BASE_7DAY_TEMPLATE)]
+            tpl_meals = shifted.get("meals", [])
+            day_focus = shifted.get("focus", day_focus)
+        else:
+            tpl_meals = day_tpl.get("meals", [])
+
         raw_meals = []
-        tpl_meals = day_tpl.get("meals")
         if not isinstance(tpl_meals, list):
             continue
         for m in tpl_meals:
             if not isinstance(m, dict):
                 continue
             candidate = dict(m)
-            warns = check_warnings(profile, [str(candidate.get("name_vi", ""))], [], candidate)
-            if any(w["level"] == "red" for w in warns):
-                rep = dict(_SAFE_REPLACEMENTS[rep_idx % len(_SAFE_REPLACEMENTS)])
-                rep["meal_type"] = str(candidate.get("meal_type", "lunch"))
-                candidate = rep
-                rep_idx += 1
+            # Neu nguoi dung KHÔNG chu dong chon mon do, moi loc bo theo di ung
+            if not pool:
+                warns = check_warnings(profile, [str(candidate.get("name_vi", ""))], [], candidate)
+                if any(w["level"] == "red" for w in warns):
+                    rep = dict(_SAFE_REPLACEMENTS[rep_idx % len(_SAFE_REPLACEMENTS)])
+                    rep["meal_type"] = str(candidate.get("meal_type", "lunch"))
+                    candidate = rep
+                    rep_idx += 1
             raw_meals.append(candidate)
 
         base_kcal = sum(float(x.get("calories", 0)) for x in raw_meals) or 1700.0
@@ -1009,6 +1283,7 @@ def generate_weekly_meal_plan(daily_goal=2000, profile=None):
             f = round(float(m.get("fat_g", 0)) * scale, 1)
             cb = round(float(m.get("carbs_g", 0)) * scale, 1)
             pg = max(80, round(float(m.get("portion_g", 150)) * scale / 10.0) * 10)
+            extra = build_recipe_and_shopping_for_meal(m["name_vi"], pg)
             scaled_meals.append({
                 "meal_type": m["meal_type"],
                 "name_vi": m["name_vi"],
@@ -1017,6 +1292,9 @@ def generate_weekly_meal_plan(daily_goal=2000, profile=None):
                 "protein_g": p,
                 "fat_g": f,
                 "carbs_g": cb,
+                "shopping_items": extra["shopping_items"],
+                "cooking_time_min": extra["cooking_time_min"],
+                "recipe_steps": extra["recipe_steps"],
             })
             day_cal += c
             day_pro += p
@@ -1025,7 +1303,8 @@ def generate_weekly_meal_plan(daily_goal=2000, profile=None):
 
         days_out.append({
             "day": day_tpl["day"],
-            "focus": day_tpl["focus"],
+            "focus": day_focus,
+            "preference": pref_raw or "Linh hoạt",
             "total_calories": round(day_cal),
             "total_protein_g": round(day_pro, 1),
             "total_fat_g": round(day_fat, 1),
