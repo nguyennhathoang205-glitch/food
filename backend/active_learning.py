@@ -560,94 +560,289 @@ def clear_today_exercise(user_key: str) -> dict:
     return get_today_exercise(user_key)
 
 
-def _eval_single_food_metrics(info: dict, conditions: list[str], allergies: list[str]) -> dict:
+_DISH_KNOWN_INGREDIENTS: dict[str, list[str]] = {
+    "bánh bột lọc": ["Bột năng luộc trong", "Nhân tôm tươi", "Thịt ba chỉ rim", "Hành khô phi", "Nước mắm ớt"],
+    "bánh xèo": ["Vỏ bột gạo nghệ chiên giòn", "Tôm tươi", "Thịt ba chỉ", "Giá đỗ & đậu xanh", "Rau sống & nước mắm"],
+    "bánh khọt": ["Bột gạo chiên khuôn", "Tôm tươi", "Nước cốt dừa", "Mỡ hành & bột tôm", "Rau sống & nước mắm"],
+    "bánh bèo": ["Bột gạo hấp chén", "Tôm cháy", "Mỡ hành & da heo chiên", "Nước mắm ngọt"],
+    "gỏi cuốn": ["Bánh tráng gạo", "Tôm luộc", "Thịt ba chỉ luộc", "Bún tươi & rau sống", "Tương chấm đậu phộng"],
+    "bún đậu": ["Bún lá ép", "Đậu hũ chiên", "Thịt chân giò luộc", "Chả cốm", "Mắm tôm & rau kinh giới"],
+    "bún riêu": ["Bún tươi", "Riêu cua đồng", "Đậu hũ chiên", "Cà chua & huyết", "Mắm tôm & rau sống"],
+    "bún mắm": ["Bún tươi", "Nước lèo mắm cá linh/cá sặc", "Tôm, mực & cá", "Thịt heo quay", "Rau đắng & bông súng"],
+    "hủ tiếu": ["Sợi hủ tiếu gạo", "Thịt heo & tôm", "Trứng cút", "Nước dùng ninh xương", "Giá hẹ & hành phi"],
+    "mì quảng": ["Sợi mì Quảng nghệ", "Tôm & thịt heo/gà", "Trứng", "Đậu phộng rang & bánh đa", "Rau sống"],
+    "cao lầu": ["Sợi mì cao lầu", "Thịt xá xíu heo", "Da heo chiên giòn", "Rau sống & nước sốt"],
+    "bánh canh": ["Sợi bánh canh bột gạo/bột lọc", "Thịt heo / giò heo / chả", "Nước dùng hầm xương", "Hành ngò & tiêu"],
+    "bánh chưng": ["Gạo nếp cái hoa vàng", "Đậu xanh đãi vỏ", "Thịt mỡ ba chỉ heo", "Tiêu & hành muối"],
+    "bánh tét": ["Gạo nếp", "Đậu xanh", "Thịt mỡ ba chỉ heo", "Đồ chua ăn kèm"],
+    "bánh cuốn": ["Vỏ bánh bột gạo tráng mỏng", "Nhân thịt heo băm & mộc nhĩ", "Chả lụa", "Hành phi & nước mắm"],
+    "bánh ướt": ["Bánh ướt bột gạo", "Chả lụa & nem chua", "Hành phi", "Giá trụng & nước mắm"],
+    "bánh mì": ["Vỏ bánh mì bột mì (gluten)", "Thịt heo / chả lụa", "Pate gan & sốt bơ", "Đồ chua, dưa leo & ngò"],
+    "bánh bao": ["Vỏ bột mì hấp (gluten)", "Nhân thịt heo băm", "Trứng cút & lạp xưởng", "Mộc nhĩ"],
+    "bánh giò": ["Bột gạo tẻ & bột năng", "Nhân thịt heo băm & mộc nhĩ", "Trứng cút", "Chả lụa / tương ớt"],
+    "cơm tấm": ["Gạo tấm", "Sườn heo nướng", "Bì heo", "Chả trứng hấp", "Mỡ hành & nước mắm"],
+    "cơm gà": ["Cơm nấu nước luộc gà", "Thịt gà xé / gà quay", "Đồ chua & dưa leo", "Nước mắm gừng"],
+    "cơm chiên": ["Cơm rang trứng", "Xúc xích / lạp xưởng / tôm thịt", "Rau củ hạt lựu", "Nước tương"],
+    "chả giò": ["Bánh tráng cuốn chiên ngập dầu", "Thịt heo băm & tôm", "Trứng", "Miến & mộc nhĩ"],
+    "nem rán": ["Bánh tráng cuốn chiên ngập dầu", "Thịt heo băm & tôm", "Trứng", "Miến & mộc nhĩ"],
+    "bún thịt nướng": ["Bún tươi", "Thịt heo nướng sả", "Chả giò chiên", "Đậu phộng & mỡ hành", "Nước mắm chua ngọt"],
+    "bún chả": ["Bún tươi", "Chả thịt heo nướng", "Thịt ba chỉ nướng", "Đu đủ chua & rau sống", "Nước mắm chua ngọt"],
+    "bún bò": ["Bún sợi to", "Thịt bắp bò & giò heo", "Chả bò Huế", "Nước dùng hầm xương sả", "Rau sống"],
+    "phở": ["Bánh phở gạo", "Thịt bò / thịt gà", "Nước dùng ninh xương", "Hành lá & giá trụng"],
+    "bò kho": ["Thịt bò nạm/gân hầm", "Cà rốt", "Nước sốt ngũ vị hương", "Bánh mì / hủ tiếu"],
+    "thịt kho": ["Thịt ba chỉ heo kho", "Trứng vịt/trứng cút", "Nước dừa & nước mắm", "Hành tỏi"],
+}
+
+
+def get_known_dish_ingredients(name_vi: str) -> list[str]:
+    """Tra ve thanh phan dac trung cua mon an Viet de doi chieu di ung & benh ly."""
+    low = _norm(name_vi)
+    for key, ings in _DISH_KNOWN_INGREDIENTS.items():
+        if _norm(key) in low:
+            return list(ings)
+    if "bún" in low:
+        return ["Bún gạo tươi", "Đạm thịt / chả", "Nước dùng / nước mắm", "Rau sống"]
+    if "phở" in low:
+        return ["Bánh phở gạo", "Thịt bò / gà", "Nước dùng hầm xương", "Rau gia vị"]
+    if "cơm" in low:
+        return ["Cơm trắng", "Thịt / cá chế biến", "Rau ăn kèm", "Nước chấm"]
+    return [name_vi]
+
+
+def estimate_standard_serving(name_vi: str, category: str | None = None) -> tuple[int, str]:
+    """Uoc tinh khoi luong 1 khau phan an thuc te theo nhom mon Viet Nam (Viện Dinh dưỡng)."""
+    low = _norm(name_vi)
+    cat = _norm(category or "")
+    if cat == "fruit" or any(k in low for k in (
+        "chuối", "táo", "cam", "xoài", "dưa hấu", "nho", "ổi", "bưởi", "thanh long",
+        "đu đủ", "dâu", "mít", "sầu riêng", "bơ", "vải", "nhãn", "mận", "đào", "lê", "dứa", "thơm",
+        "chè", "sữa chua", "kem", "flan", "tàu hũ",
+    )):
+        return 150, "1 phần tiêu chuẩn (~150g)"
+    if any(k in low for k in (
+        "phở", "bún bò", "bún riêu", "bún cá", "bún mắm", "bún mọc", "bún thang",
+        "bánh canh", "hủ tiếu", "miến", "mì quảng", "cao lầu", "lẩu", "bánh đa cua",
+    )):
+        return 380, "1 tô tiêu chuẩn (~380g cả nước & cái)"
+    if any(k in low for k in ("cháo", "súp", "canh")):
+        return 300, "1 tô vừa (~300g)"
+    if any(k in low for k in ("cơm tấm", "cơm gà", "cơm chiên", "cơm sườn", "cơm")):
+        return 320, "1 đĩa tiêu chuẩn (~320g)"
+    if any(k in low for k in (
+        "bún chả", "bún thịt nướng", "bún đậu", "bánh cuốn", "bánh ướt", "bánh xèo", "mì xào",
+    )):
+        return 260, "1 suất tiêu chuẩn (~260g)"
+    if any(k in low for k in ("bánh mì", "xôi", "bánh bao", "bánh giò")):
+        return 210, "1 ổ / 1 gói (~210g)"
+    if any(k in low for k in ("bánh chưng", "bánh tét", "bánh dày")):
+        return 200, "1 góc / 1 khoanh (~200g)"
+    if any(k in low for k in (
+        "bánh bột lọc", "bánh bèo", "bánh khọt", "bánh ít", "bánh đúc", "bánh pía",
+        "bánh cam", "bánh tiêu", "bánh bò", "bánh da lợn", "bánh chuối", "bánh tráng",
+        "gỏi cuốn", "chả giò", "nem", "bò bía", "há cảo", "xíu mại",
+    )):
+        return 180, "1 đĩa nhỏ / 1 phần (~180g)"
+    if any(k in low for k in ("rau", "gỏi", "nộm", "salad", "cà pháo", "dưa")):
+        return 180, "1 đĩa (~180g)"
+    return 250, "1 khẩu phần chuẩn (~250g)"
+
+
+def _eval_single_food_metrics(
+    info: dict,
+    conditions: list[str],
+    allergies: list[str],
+    compare_mode: str = "serving",
+    custom_portion_g: int | None = None,
+) -> dict:
+    import health as health_rules
+
+    name_vi = str(info.get("name_vi") or "Món ăn")
     nut = info.get("nutrition") if isinstance(info.get("nutrition"), dict) else info
-    portion = int(info.get("portion_g") or nut.get("portion_g") or 250)
-    if nut.get("calories") is not None:
-        cal = max(float(nut.get("calories") or 1), 1.0)
-        pro = float(nut.get("protein_g") or 0)
-        fat = float(nut.get("fat_g") or 0)
-        carb = float(nut.get("carbs_g") or 0)
+    std_portion_g, serving_unit = estimate_standard_serving(name_vi, info.get("category"))
+
+    # Lay dinh duong chuan tren 100g tu bang foods (Viện Dinh dưỡng Quốc gia)
+    raw_portion = int(info.get("portion_g") or nut.get("portion_g") or std_portion_g)
+    if info.get("calories_per_100g") is not None:
+        cal_100g = max(float(info.get("calories_per_100g") or 100), 1.0)
+        pro_100g = float(info.get("protein_g") or 0)
+        fat_100g = float(info.get("fat_g") or 0)
+        carb_100g = float(info.get("carbs_g") or 0)
+    elif nut.get("calories") is not None and raw_portion > 0:
+        scale_100 = 100.0 / raw_portion
+        cal_100g = max(float(nut.get("calories") or 100) * scale_100, 1.0)
+        pro_100g = float(nut.get("protein_g") or 0) * scale_100
+        fat_100g = float(nut.get("fat_g") or 0) * scale_100
+        carb_100g = float(nut.get("carbs_g") or 0) * scale_100
     else:
-        factor = portion / 100.0
-        cal = max(float(info.get("calories_per_100g") or 100) * factor, 1.0)
-        pro = float(info.get("protein_g") or 0) * factor
-        fat = float(info.get("fat_g") or 0) * factor
-        carb = float(info.get("carbs_g") or 0) * factor
+        cal_100g = 150.0
+        pro_100g = 7.0
+        fat_100g = 5.0
+        carb_100g = 20.0
+
+    if compare_mode == "per_100g":
+        portion = 100
+        portion_label = "Chuẩn 100g (So mật độ)"
+    elif custom_portion_g is not None and int(custom_portion_g) >= 50:
+        portion = int(custom_portion_g)
+        portion_label = f"Định lượng {portion}g"
+    else:
+        portion = std_portion_g
+        portion_label = serving_unit
+
+    factor = portion / 100.0
+    cal = max(cal_100g * factor, 1.0)
+    pro = pro_100g * factor
+    fat = fat_100g * factor
+    carb = carb_100g * factor
 
     p_ratio = (pro * 4.0) / cal
     f_ratio = (fat * 9.0) / cal
+    c_ratio = (carb * 4.0) / cal
+    macro_sum = carb + pro + fat + 1.0
+    buf = 1.0 - ((pro + fat) / macro_sum) * 0.25
+    gl = round(carb * 0.55 * buf)
+
     score = 75
+    reasons: list[str] = []
+    criteria_details: list[str] = []
+
+    # Tieu chi 1: Mat do nang luong (kcal/100g) & Tong calo khau phan
+    if cal_100g <= 130:
+        score += 8
+        criteria_details.append(f"Mật độ calo thấp ({round(cal_100g)} kcal/100g: +8đ)")
+    elif cal_100g > 230:
+        score -= 10
+        criteria_details.append(f"Mật độ calo đậm đặc ({round(cal_100g)} kcal/100g: -10đ)")
+    if cal > 700:
+        score -= 10
+    elif cal <= 450:
+        score += 4
+
+    # Tieu chi 2: Ty le Dam sinh hoc (Protein % kcal)
     if p_ratio >= 0.20:
         score += 12
+        criteria_details.append(f"Giàu đạm ({round(p_ratio * 100)}% năng lượng: +12đ)")
+    elif p_ratio >= 0.14:
+        score += 4
     elif p_ratio < 0.10:
-        score -= 10
-    if f_ratio > 0.42:
-        score -= 18
-    elif f_ratio > 0.35:
         score -= 8
-    if cal > 800:
+        criteria_details.append(f"Ít đạm ({round(p_ratio * 100)}% năng lượng: -8đ)")
+
+    # Tieu chi 3: Ty le Chat beo (Fat % kcal)
+    if f_ratio > 0.40:
         score -= 15
-    elif cal <= 550 and p_ratio >= 0.18:
-        score += 8
+        criteria_details.append(f"Tỷ lệ béo cao ({round(f_ratio * 100)}% năng lượng: -15đ)")
+    elif f_ratio > 0.33:
+        score -= 7
+    elif f_ratio <= 0.22:
+        score += 5
+        criteria_details.append(f"Ít béo ({round(f_ratio * 100)}% năng lượng: +5đ)")
 
-    # Phat diem theo benh ly ca nhan
+    # Tieu chi 4: Tai duong huyet (Glycemic Load - GL)
+    if gl <= 16:
+        score += 6
+        criteria_details.append(f"Tải đường huyết thấp (GL={gl}: +6đ)")
+    elif gl >= 30:
+        score -= 8
+        criteria_details.append(f"Tải đường huyết cao (GL={gl}: -8đ)")
+
+    # Tieu chi 5: Doi chieu Ho so Di ung & Benh ly nen (kiem tra ca thanh phan ngam trong mon)
+    known_ings = get_known_dish_ingredients(name_vi)
+    profile_dict = {
+        "allergies": list(allergies or []),
+        "conditions": list(conditions or []),
+        "medications": [],
+    }
+    health_warns = health_rules.check_warnings(
+        profile_dict,
+        [name_vi],
+        known_ings,
+        {"calories": cal, "protein_g": pro, "fat_g": fat, "carbs_g": carb},
+    )
+
+    has_allergy_conflict = False
+    has_condition_conflict = False
+    for w in health_warns:
+        msg = str(w.get("message") or "").strip()
+        if not msg:
+            continue
+        if w.get("level") == "red":
+            has_allergy_conflict = True
+            score -= 40
+            reasons.append(f"🚫 {msg}")
+        else:
+            has_condition_conflict = True
+            score -= 14
+            reasons.append(f"⚠️ {msg}")
+
     cond_norm = " ".join(_norm(c) for c in conditions)
-    reasons: list[str] = []
-    if "tieu duong" in cond_norm or "tiểu đường" in cond_norm:
-        if carb > 65:
-            score -= 14
-            reasons.append(f"Tinh bột cao ({carb:.0f}g)")
-        elif carb <= 45:
-            score += 8
-            reasons.append(f"Tinh bột vừa phải ({carb:.0f}g)")
-    if "mo mau" in cond_norm or "mỡ máu" in cond_norm or "tim mach" in cond_norm:
-        if fat > 22:
-            score -= 14
-            reasons.append(f"Chất béo cao ({fat:.0f}g)")
-        elif fat <= 14:
-            score += 8
-            reasons.append(f"Ít béo ({fat:.0f}g)")
-    if "gout" in cond_norm and pro > 35:
+    if ("tiểu đường" in cond_norm or "tieu duong" in cond_norm):
+        if carb > 55 or gl >= 28:
+            if not any("Tiểu đường" in r or "tiểu đường" in r for r in reasons):
+                has_condition_conflict = True
+                score -= 12
+                reasons.append(f"⚠️ Tiểu đường: Tinh bột/GL khá cao ({carb:.0f}g Carb, GL={gl})")
+        elif carb <= 38 and gl <= 18:
+            score += 6
+            reasons.append(f"✅ Tiểu đường: Tinh bột & GL kiểm soát tốt ({carb:.0f}g Carb, GL={gl})")
+
+    if any(k in cond_norm for k in ("mỡ máu", "mo mau", "cholesterol", "tim mạch", "béo phì")):
+        if fat > 18 or f_ratio > 0.34:
+            if not any("béo" in r.lower() or "mỡ máu" in r.lower() for r in reasons):
+                has_condition_conflict = True
+                score -= 12
+                reasons.append(f"⚠️ Mỡ máu/Cân nặng: Chất béo khá cao ({fat:.1f}g Béo)")
+        elif fat <= 10:
+            score += 6
+            reasons.append(f"✅ Ít chất béo ({fat:.1f}g), tốt cho mỡ máu & kiểm soát cân nặng")
+
+    if "gout" in cond_norm and pro > 32 and not any("gout" in r.lower() for r in reasons):
+        has_condition_conflict = True
         score -= 10
-        reasons.append(f"Đạm cao ({pro:.0f}g)")
+        reasons.append(f"⚠️ Gout: Đạm khẩu phần cao ({pro:.0f}g), cần uống nhiều nước")
 
-    name_vi = str(info.get("name_vi") or "Món ăn")
-    name_norm = _norm(name_vi)
-    for al in allergies:
-        al_n = _norm(al)
-        if al_n and al_n in name_norm:
-            score -= 35
-            reasons.append(f"Chứa dị ứng '{al}'")
+    if (allergies or conditions) and not has_allergy_conflict and not has_condition_conflict and not reasons:
+        score += 5
+        reasons.append("✅ Phù hợp với hồ sơ dị ứng & bệnh lý của bạn")
 
-    score = max(min(score, 98), 20)
-    if score >= 82:
+    score = max(min(score, 98), 15)
+    if score >= 82 and not has_allergy_conflict:
         grade = "A"
-    elif score >= 68:
+    elif score >= 68 and not has_allergy_conflict:
         grade = "B"
-    elif score >= 54:
+    elif score >= 54 and not has_allergy_conflict:
         grade = "C"
     elif score >= 40:
         grade = "D"
     else:
         grade = "E"
 
-    macro_sum = carb + pro + fat + 1.0
-    buf = 1.0 - ((pro + fat) / macro_sum) * 0.25
-    gl = round(carb * 0.55 * buf)
-
     return {
         "name_vi": name_vi,
         "portion_g": portion,
+        "portion_label": portion_label,
+        "standard_portion_g": std_portion_g,
+        "serving_unit": serving_unit,
+        "calories_per_100g": round(cal_100g),
+        "protein_per_100g": round(pro_100g, 1),
+        "fat_per_100g": round(fat_100g, 1),
+        "carbs_per_100g": round(carb_100g, 1),
         "calories": round(cal),
         "protein_g": round(pro, 1),
         "fat_g": round(fat, 1),
         "carbs_g": round(carb, 1),
+        "protein_pct": round(p_ratio * 100),
+        "fat_pct": round(f_ratio * 100),
+        "carbs_pct": round(c_ratio * 100),
         "nutri_score": grade,
         "health_score": score,
         "glycemic_load": gl,
         "burn_walk_min": max(round(cal / 5.5), 5),
         "burn_run_min": max(round(cal / 10.0), 3),
+        "known_ingredients": known_ings,
+        "has_allergy_conflict": has_allergy_conflict,
+        "has_condition_conflict": has_condition_conflict,
+        "criteria_details": criteria_details,
         "notes": reasons,
     }
 
@@ -658,15 +853,25 @@ def compare_two_foods(
     foods_cache: dict,
     user_conditions: list[str] | None = None,
     user_allergies: list[str] | None = None,
+    compare_mode: str = "serving",
+    custom_portion_g: int | None = None,
 ) -> dict:
     """So sanh 2 mon an truc dien theo dinh duong & benh ly ca nhan."""
     conds = user_conditions or []
     alls = user_allergies or []
-    info_a = foods_cache.get(food_a_id) or foods_cache.get(0) or {}
-    info_b = foods_cache.get(food_b_id) or foods_cache.get(1) or {}
+    info_a = foods_cache.get(food_a_id)
+    if info_a is None:
+        info_a = foods_cache.get(0) or {}
+    info_b = foods_cache.get(food_b_id)
+    if info_b is None:
+        info_b = foods_cache.get(1) or {}
 
-    res_a = _eval_single_food_metrics(info_a, conds, alls)
-    res_b = _eval_single_food_metrics(info_b, conds, alls)
+    res_a = _eval_single_food_metrics(
+        info_a, conds, alls, compare_mode=compare_mode, custom_portion_g=custom_portion_g
+    )
+    res_b = _eval_single_food_metrics(
+        info_b, conds, alls, compare_mode=compare_mode, custom_portion_g=custom_portion_g
+    )
     res_a["class_id"] = food_a_id
     res_b["class_id"] = food_b_id
 
@@ -675,20 +880,49 @@ def compare_two_foods(
     lose_obj = res_b if winner == "A" else res_a
 
     cal_diff = abs(res_a["calories"] - res_b["calories"])
+    cal100_diff = abs(res_a["calories_per_100g"] - res_b["calories_per_100g"])
     gl_diff = abs(res_a["glycemic_load"] - res_b["glycemic_load"])
 
-    verdict = (
+    verdict_parts = [
         f"Nên chọn '{win_obj['name_vi']}' (Điểm sức khỏe {win_obj['health_score']}/100, "
-        f"Nutri-Score {win_obj['nutri_score']}, GL={win_obj['glycemic_load']}) thay vì '{lose_obj['name_vi']}'. "
-        f"Chênh lệch {cal_diff} kcal và {gl_diff} điểm tải đường huyết (GL)."
+        f"Nutri-Score {win_obj['nutri_score']}, GL={win_obj['glycemic_load']}) "
+        f"thay vì '{lose_obj['name_vi']}' ({lose_obj['health_score']}/100)."
+    ]
+    if lose_obj.get("has_allergy_conflict") and not win_obj.get("has_allergy_conflict"):
+        verdict_parts.append(
+            f"Lưu ý quan trọng: '{lose_obj['name_vi']}' chứa thành phần trùng với DỊ ỨNG trong hồ sơ của bạn."
+        )
+    elif lose_obj.get("has_condition_conflict") and not win_obj.get("has_condition_conflict"):
+        verdict_parts.append(
+            f"'{win_obj['name_vi']}' an toàn hơn cho bệnh lý nền của bạn."
+        )
+    verdict_parts.append(
+        f"Xét mật độ gốc: {win_obj['name_vi']} có {win_obj['calories_per_100g']} kcal/100g "
+        f"so với {lose_obj['name_vi']} ({lose_obj['calories_per_100g']} kcal/100g, lệch {cal100_diff} kcal/100g). "
+        f"Ở mức khẩu phần đang so sánh ({win_obj['portion_g']}g vs {lose_obj['portion_g']}g), "
+        f"chênh lệch là {cal_diff} kcal và {gl_diff} điểm tải đường huyết (GL)."
     )
+
+    criteria_guide = [
+        "1. Mật độ Calo chuẩn (kcal/100g): Tra từ Bảng Thành phần Thực phẩm Việt Nam (Viện Dinh dưỡng Quốc gia).",
+        "2. Định lượng khẩu phần thực tế (g): Chuẩn hóa theo đơn vị ăn thực tế của từng nhóm món (1 tô bún/phở/bánh canh ~380g cả nước, 1 đĩa cơm ~320g, 1 ổ bánh mì ~210g, 1 đĩa bánh nhỏ/ăn vặt ~180g).",
+        "3. Tỷ lệ Đa lượng (Đạm / Béo / Carb): Ưu tiên món giàu đạm (>=18% kcal) và kiểm soát chất béo (<33% kcal).",
+        "4. Tải đường huyết (Glycemic Load - GL): Đánh giá tốc độ tăng đường máu sau ăn dựa trên lượng Carb và độ đệm của Đạm/Xơ.",
+        "5. Đối chiếu Hồ sơ Sức khỏe cá nhân: Tự động quét thành phần ngầm của món (vd: Bánh bột lọc có nhân tôm thịt, Bánh chưng có thịt mỡ...) để trừ điểm và cảnh báo nếu trùng Dị ứng hoặc Bệnh lý nền.",
+    ]
 
     return {
         "food_a": res_a,
         "food_b": res_b,
+        "compare_mode": compare_mode,
         "winner": winner,
         "winner_name": win_obj["name_vi"],
-        "verdict": verdict,
+        "verdict": " ".join(verdict_parts),
+        "criteria_guide": criteria_guide,
+        "active_health_profile": {
+            "allergies": alls,
+            "conditions": conds,
+        },
     }
 
 

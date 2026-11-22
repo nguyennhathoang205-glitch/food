@@ -489,6 +489,23 @@ _DEFAULT_DISH_INGREDIENTS = {
         "Chả lụa & hành phi",
         "Giá trụng, rau thơm & nước mắm",
     ],
+    "bánh bột lọc": [
+        "Vỏ bột năng luộc trong",
+        "Nhân tôm tươi & thịt ba chỉ rim",
+        "Hành phi & nước mắm ớt",
+    ],
+    "bánh canh": [
+        "Sợi bánh canh bột gạo",
+        "Thịt heo / giò heo",
+        "Nước dùng hầm xương",
+        "Hành lá, ngò rí & tiêu",
+    ],
+    "bánh chưng": [
+        "Gạo nếp cái hoa vàng",
+        "Đậu xanh đãi vỏ",
+        "Thịt mỡ ba chỉ heo",
+        "Dưa hành ăn kèm",
+    ],
 }
 
 
@@ -519,7 +536,7 @@ def infer_default_ingredients(dish_name, detections=None):
     if "cơm" in low:
         return ["Cơm trắng", "Thịt / Đạm chính", "Rau củ & đồ chua", "Gia vị & nước chấm"]
     if "bánh" in low:
-        return ["Phần bột bánh chính", "Nhân thịt / tôm / đậu", "Rau ăn kèm & nước chấm"]
+        return ["Phần bột bánh chính", "Nhân truyền thống", "Gia vị & nước chấm"]
     if dish_name:
         return [dish_name, "Nguyên liệu đạm & tinh bột", "Rau gia vị đi kèm"]
     return []
@@ -2501,8 +2518,8 @@ def weekly_meal_plan_endpoint():
         daily_goal = 2000
 
     health_profile = health_rules.load_profile(user_key)
-    day_preferences = payload.get("day_preferences") if isinstance(payload.get("day_preferences"), dict) else {}
-    variation_seed = int(number_or_zero(payload.get("variation_seed")))
+    day_preferences = data.get("day_preferences") if isinstance(data.get("day_preferences"), dict) else {}
+    variation_seed = int(number_or_zero(data.get("variation_seed")))
     plan = health_rules.generate_weekly_meal_plan(
         daily_goal=daily_goal,
         profile=health_profile,
@@ -2891,50 +2908,19 @@ def chat():
         "parts": [{"text": user_message}]
     })
 
-    last_error = None
-    keys_tried = 0
-
-    while keys_tried < len(GEMINI_API_KEYS):
-        client = get_gemini_client()
-        if client is None:
-            break
-
-        retries_left = 3
-
-        while retries_left > 0:
-            try:
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL_NAME,
-                    contents=contents,
-                    config={
-                        "system_instruction": system_text
-                    }
-                )
-
-                return jsonify({
-                    "status": "ok",
-                    "reply": (response.text or "").strip()
-                })
-
-            except Exception as e:
-                last_error = str(e)
-
-                retries_left -= 1
-
-                if _is_temporary_error(last_error) and retries_left > 0:
-                    time.sleep(1.5)
-                    continue
-
-                break
-
-        keys_tried += 1
-
-        if not switch_gemini_key():
-            break
+    reply_text = _gemini_call(
+        contents,
+        {"system_instruction": system_text},
+    )
+    if reply_text is not None:
+        return jsonify({
+            "status": "ok",
+            "reply": (reply_text or "").strip()
+        })
 
     return jsonify({
         "status": "error",
-        "message": f"Loi goi Gemini: {last_error}"
+        "message": "Loi goi Gemini: tat ca model va key deu tam thoi qua tai."
     }), 500
 
 
@@ -3028,20 +3014,47 @@ def foods_catalog_endpoint():
     for cid, info in _foods_cache.items():
         if not isinstance(info, dict):
             continue
+        name_vi = str(info.get("name_vi") or f"Món #{cid}")
         nut = info.get("nutrition") if isinstance(info.get("nutrition"), dict) else info
-        portion = int(info.get("portion_g") or nut.get("portion_g") or 250)
-        factor = portion / 100.0 if nut.get("calories") is None else 1.0
-        cal = round(float(nut.get("calories") or (float(info.get("calories_per_100g") or 0) * factor)))
-        if cal <= 0:
+        std_portion, serving_unit = active_learning.estimate_standard_serving(
+            name_vi, info.get("category")
+        )
+        raw_portion = int(info.get("portion_g") or nut.get("portion_g") or std_portion)
+        if info.get("calories_per_100g") is not None:
+            cal_100 = float(info.get("calories_per_100g") or 0)
+            pro_100 = float(info.get("protein_g") or 0)
+            fat_100 = float(info.get("fat_g") or 0)
+            carb_100 = float(info.get("carbs_g") or 0)
+        elif nut.get("calories") is not None and raw_portion > 0:
+            s100 = 100.0 / raw_portion
+            cal_100 = float(nut.get("calories") or 0) * s100
+            pro_100 = float(nut.get("protein_g") or 0) * s100
+            fat_100 = float(nut.get("fat_g") or 0) * s100
+            carb_100 = float(nut.get("carbs_g") or 0) * s100
+        else:
+            cal_100 = 0.0
+            pro_100 = 0.0
+            fat_100 = 0.0
+            carb_100 = 0.0
+        if cal_100 <= 0:
             continue
+        factor = std_portion / 100.0
         items.append({
             "class_id": int(cid),
-            "name_vi": str(info.get("name_vi") or f"Món #{cid}"),
-            "calories": cal,
-            "protein_g": round(float(nut.get("protein_g") or info.get("protein_g") or 0) * factor, 1),
-            "fat_g": round(float(nut.get("fat_g") or info.get("fat_g") or 0) * factor, 1),
-            "carbs_g": round(float(nut.get("carbs_g") or info.get("carbs_g") or 0) * factor, 1),
-            "portion_g": portion,
+            "name_vi": name_vi,
+            "category": info.get("category"),
+            "calories_per_100g": round(cal_100),
+            "protein_per_100g": round(pro_100, 1),
+            "fat_per_100g": round(fat_100, 1),
+            "carbs_per_100g": round(carb_100, 1),
+            "standard_portion_g": std_portion,
+            "serving_unit": serving_unit,
+            "known_ingredients": active_learning.get_known_dish_ingredients(name_vi),
+            "calories": round(cal_100 * factor),
+            "protein_g": round(pro_100 * factor, 1),
+            "fat_g": round(fat_100 * factor, 1),
+            "carbs_g": round(carb_100 * factor, 1),
+            "portion_g": std_portion,
         })
     items.sort(key=lambda x: x["name_vi"])
     return jsonify({"status": "ok", "foods": items})
@@ -3052,8 +3065,17 @@ def foods_compare_endpoint():
     """So sanh truc dien 2 mon an theo dinh duong & benh ly ca nhan."""
     payload = request.get_json(silent=True) or {}
     user_key = _current_user_key()
-    food_a_id = int(payload.get("food_a_id") or 0)
-    food_b_id = int(payload.get("food_b_id") or 1)
+    raw_a = payload.get("food_a_id")
+    raw_b = payload.get("food_b_id")
+    food_a_id = int(raw_a) if raw_a is not None else 0
+    food_b_id = int(raw_b) if raw_b is not None else 1
+    compare_mode = str(payload.get("compare_mode") or "serving").strip()
+    raw_portion = payload.get("custom_portion_g")
+    custom_portion_g = (
+        int(number_or_zero(raw_portion))
+        if raw_portion is not None and number_or_zero(raw_portion) >= 50
+        else None
+    )
 
     hp = health_rules.load_profile(user_key)
     conds = hp.get("conditions", []) if isinstance(hp, dict) else []
@@ -3065,6 +3087,8 @@ def foods_compare_endpoint():
         foods_cache=_foods_cache,
         user_conditions=conds,
         user_allergies=alls,
+        compare_mode=compare_mode,
+        custom_portion_g=custom_portion_g,
     )
     return jsonify({"status": "ok", **res})
 
@@ -3129,22 +3153,19 @@ def analyze_menu_endpoint():
     daily_goal = number_or_zero(payload.get("daily_goal") or request.form.get("daily_goal")) or 2000.0
 
     # Neu nguoi dung chup anh to Menu va co Gemini Vision -> trich xuat ten mon tren menu
-    gclient = get_gemini_client()
-    if "image" in request.files and gclient is not None:
+    if "image" in request.files and GEMINI_API_KEYS:
         try:
             f = request.files["image"]
             img_bytes = jpeg_for_gemini(f.read())
             if img_bytes:
-                resp = gclient.models.generate_content(
-                    model=GEMINI_MODEL_NAME,
-                    contents=[
-                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                extracted = _gemini_call(
+                    [
+                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
                         "Đọc ảnh thực đơn (menu) này và liệt kê tối đa 8 tên món ăn bằng tiếng Việt, mỗi món 1 dòng, không đánh số.",
-                    ],
+                    ]
                 )
-                extracted = (resp.text or "").strip()
-                if extracted:
-                    menu_text = extracted
+                if extracted and extracted.strip():
+                    menu_text = extracted.strip()
         except Exception:
             pass
 
@@ -3176,22 +3197,19 @@ def fridge_suggest_endpoint():
         ingredients = [x.strip() for x in raw_ings.split(",") if x.strip()]
 
     # Neu nguoi dung chup anh tu lanh va co Gemini Vision -> nhan dien nguyen lieu
-    gclient = get_gemini_client()
-    if "image" in request.files and gclient is not None:
+    if "image" in request.files and GEMINI_API_KEYS:
         try:
             f = request.files["image"]
             img_bytes = jpeg_for_gemini(f.read())
             if img_bytes:
-                resp = gclient.models.generate_content(
-                    model=GEMINI_MODEL_NAME,
-                    contents=[
-                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                extracted = _gemini_call(
+                    [
+                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
                         "Liệt kê các nguyên liệu thực phẩm nhìn thấy trong ảnh này bằng tiếng Việt, cách nhau bởi dấu phẩy (ngắn gọn).",
-                    ],
+                    ]
                 )
-                extracted = (resp.text or "").strip()
-                if extracted:
-                    ingredients.extend([x.strip() for x in extracted.split(",") if x.strip()])
+                if extracted and extracted.strip():
+                    ingredients.extend([x.strip() for x in extracted.strip().split(",") if x.strip()])
         except Exception:
             pass
 

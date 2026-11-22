@@ -9,6 +9,7 @@ import '../../core/app_session.dart';
 import '../../core/day_stats.dart';
 import '../../core/nutrition_calc.dart';
 import '../../models/models.dart';
+import '../../more_extras.dart' show showHealthProfileDialog;
 import '../../services/meal_service.dart';
 
 // ============================================================
@@ -1236,7 +1237,39 @@ class _WeeklyMealPlanSheetState extends State<WeeklyMealPlanSheet> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                    onPressed: () async {
+                      final saved = await showHealthProfileDialog(
+                        context,
+                        baseUrl: AppConfig.baseUrl,
+                        userKey: AppSession.currentUserKey,
+                      );
+                      if (saved && mounted) {
+                        _loadPlan();
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.health_and_safety_rounded,
+                      size: 15,
+                      color: primaryDark,
+                    ),
+                    label: const Text(
+                      '⚙️ Chỉnh sửa Hồ sơ Dị ứng & Bệnh lý nền',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: primaryDark,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -2030,6 +2063,8 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
   List<Map<String, dynamic>> _foods = [];
   int? _foodAId;
   int? _foodBId;
+  String _compareMode = 'serving'; // 'serving' | 'per_100g'
+  int? _customPortionG; // null = theo khau phan thuc te tung mon, hoac 100/200/300/400
   Map<String, dynamic>? _result;
 
   @override
@@ -2066,19 +2101,52 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
   }
 
   Map<String, dynamic> _buildLocalFoodMetrics(Map<String, dynamic> raw) {
-    final cal = ((raw['calories'] as num?)?.toDouble() ?? 350.0);
-    final pro = ((raw['protein_g'] as num?)?.toDouble() ?? 15.0);
-    final fat = ((raw['fat_g'] as num?)?.toDouble() ?? 12.0);
-    final carb = ((raw['carbs_g'] as num?)?.toDouble() ?? 45.0);
-    final portion = ((raw['portion_g'] as num?)?.toInt() ?? 250);
-    final gl = (carb * 0.55 * (1.0 - ((pro + fat) / (carb + pro + fat + 1.0)) * 0.25)).round();
+    final stdPortion = ((raw['standard_portion_g'] as num?)?.toInt() ??
+        (raw['portion_g'] as num?)?.toInt() ??
+        250);
+    final rawCal = ((raw['calories'] as num?)?.toDouble() ?? 350.0);
+    final cal100 = ((raw['calories_per_100g'] as num?)?.toDouble() ??
+        (stdPortion > 0 ? rawCal * 100.0 / stdPortion : 150.0));
+    final pro100 = ((raw['protein_per_100g'] as num?)?.toDouble() ??
+        (stdPortion > 0
+            ? ((raw['protein_g'] as num?)?.toDouble() ?? 15.0) * 100.0 / stdPortion
+            : 7.0));
+    final fat100 = ((raw['fat_per_100g'] as num?)?.toDouble() ??
+        (stdPortion > 0
+            ? ((raw['fat_g'] as num?)?.toDouble() ?? 12.0) * 100.0 / stdPortion
+            : 5.0));
+    final carb100 = ((raw['carbs_per_100g'] as num?)?.toDouble() ??
+        (stdPortion > 0
+            ? ((raw['carbs_g'] as num?)?.toDouble() ?? 45.0) * 100.0 / stdPortion
+            : 20.0));
+
+    final int portion = _compareMode == 'per_100g'
+        ? 100
+        : (_customPortionG ?? stdPortion);
+    final String portionLabel = _compareMode == 'per_100g'
+        ? 'Chuẩn 100g (So mật độ)'
+        : (_customPortionG != null
+            ? 'Định lượng ${_customPortionG}g'
+            : '${raw['serving_unit'] ?? '1 phần (~${stdPortion}g)'}');
+    final factor = portion / 100.0;
+    final cal = cal100 * factor;
+    final pro = pro100 * factor;
+    final fat = fat100 * factor;
+    final carb = carb100 * factor;
+
+    final gl = (carb *
+            0.55 *
+            (1.0 - ((pro + fat) / (carb + pro + fat + 1.0)) * 0.25))
+        .round();
     int score = 75;
     final pRatio = (pro * 4.0) / (cal > 0 ? cal : 1.0);
     final fRatio = (fat * 9.0) / (cal > 0 ? cal : 1.0);
-    if (pRatio >= 0.20) score += 10;
+    if (cal100 <= 130) score += 8;
+    if (cal100 > 230) score -= 10;
+    if (pRatio >= 0.20) score += 12;
     if (fRatio > 0.38) score -= 12;
-    if (cal > 600) score -= 10;
-    if (cal <= 420) score += 6;
+    if (cal > 700) score -= 10;
+    if (cal <= 450) score += 4;
     score = score.clamp(35, 95);
     String grade = 'B';
     if (score >= 82) {
@@ -2094,15 +2162,21 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
       'class_id': raw['class_id'],
       'name_vi': raw['name_vi'] ?? 'Món ăn',
       'portion_g': portion,
+      'portion_label': portionLabel,
+      'standard_portion_g': stdPortion,
+      'serving_unit': raw['serving_unit'] ?? '1 phần (~${stdPortion}g)',
+      'calories_per_100g': cal100.round(),
       'calories': cal.round(),
-      'protein_g': pro,
-      'fat_g': fat,
-      'carbs_g': carb,
+      'protein_g': double.parse(pro.toStringAsFixed(1)),
+      'fat_g': double.parse(fat.toStringAsFixed(1)),
+      'carbs_g': double.parse(carb.toStringAsFixed(1)),
       'glycemic_load': gl,
       'burn_run_min': (cal / 10.0).round(),
       'burn_walk_min': (cal / 5.5).round(),
       'health_score': score,
       'nutri_score': grade,
+      'known_ingredients': raw['known_ingredients'] ?? [],
+      'notes': <String>[],
     };
   }
 
@@ -2126,7 +2200,8 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
       'food_a': fa,
       'food_b': fb,
       'winner': winner,
-      'verdict': 'Nên ưu tiên $winName vì cân bằng năng lượng và chỉ số đường huyết (GL) tốt hơn.',
+      'verdict':
+          'Đang đối chiếu hồ sơ dị ứng & bệnh lý cá nhân... Tạm thời ưu tiên $winName theo mật độ dinh dưỡng.',
     };
   }
 
@@ -2138,6 +2213,8 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
     });
     final reqA = _foodAId;
     final reqB = _foodBId;
+    final reqMode = _compareMode;
+    final reqPortion = _customPortionG;
     try {
       final res = await http.post(
         Uri.parse('${AppConfig.baseUrl}/api/foods/compare'),
@@ -2146,11 +2223,17 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
           'user_key': AppSession.currentUserKey,
           'food_a_id': reqA,
           'food_b_id': reqB,
+          'compare_mode': reqMode,
+          'custom_portion_g': reqPortion,
         }),
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(utf8.decode(res.bodyBytes));
-        if (mounted && _foodAId == reqA && _foodBId == reqB) {
+        if (mounted &&
+            _foodAId == reqA &&
+            _foodBId == reqB &&
+            _compareMode == reqMode &&
+            _customPortionG == reqPortion) {
           setState(() {
             _result = body as Map<String, dynamic>;
             _comparing = false;
@@ -2162,18 +2245,49 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
     if (mounted) setState(() => _comparing = false);
   }
 
+  String _dropdownLabel(Map<String, dynamic> f) {
+    final name = '${f['name_vi'] ?? ''}';
+    final cal100 = f['calories_per_100g'] ?? f['calories'] ?? 0;
+    final stdP = f['standard_portion_g'] ?? f['portion_g'] ?? 250;
+    final stdCal = f['calories'] ?? 0;
+    if (_compareMode == 'per_100g') {
+      return '$name ($cal100 kcal / 100g)';
+    }
+    if (_customPortionG != null) {
+      final c = ((cal100 as num).toDouble() * _customPortionG! / 100.0).round();
+      return '$name ($c kcal / ${_customPortionG}g · $cal100 kcal/100g)';
+    }
+    return '$name (~${stdP}g: $stdCal kcal · $cal100 kcal/100g)';
+  }
+
   Widget _buildFoodCol(Map<String, dynamic> f, bool isWinner) {
     final grade = '${f['nutri_score'] ?? 'B'}';
     final score = f['health_score'] ?? 75;
+    final cal100 = f['calories_per_100g'] ?? 150;
+    final portionLabel =
+        '${f['portion_label'] ?? '~${f['portion_g'] ?? 250}g'}';
+    final notes = ((f['notes'] as List?) ?? []).map((e) => '$e').toList();
+    final ings =
+        ((f['known_ingredients'] as List?) ?? []).map((e) => '$e').toList();
+    final hasAllergy = f['has_allergy_conflict'] == true;
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isWinner ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+          color: hasAllergy
+              ? const Color(0xFFFEF2F2)
+              : (isWinner
+                    ? const Color(0xFFF0FDF4)
+                    : const Color(0xFFF8FAFC)),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isWinner ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
-            width: isWinner ? 1.8 : 1.0,
+            color: hasAllergy
+                ? const Color(0xFFEF4444)
+                : (isWinner
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFE2E8F0)),
+            width: (isWinner || hasAllergy) ? 1.8 : 1.0,
           ),
         ),
         child: Column(
@@ -2191,11 +2305,15 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: isWinner ? primary : const Color(0xFF64748B),
+                    color: hasAllergy
+                        ? const Color(0xFFDC2626)
+                        : (isWinner ? primary : const Color(0xFF64748B)),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    isWinner ? '🏆 TỐT HƠN' : 'ĐỐI CHIẾU',
+                    hasAllergy
+                        ? '🚫 KỴ DỊ ỨNG'
+                        : (isWinner ? '🏆 TỐT HƠN' : 'ĐỐI CHIẾU'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 9,
@@ -2205,10 +2323,12 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                 ),
                 Text(
                   'Nutri $grade',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 10.5,
-                    color: primaryDark,
+                    color: hasAllergy
+                        ? const Color(0xFFDC2626)
+                        : primaryDark,
                   ),
                 ),
               ],
@@ -2224,16 +2344,41 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                 color: accent,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Text(
+                '📏 Mật độ chuẩn: $cal100 kcal/100g',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
             Text(
               '🔥 ${f['calories']} kcal (~${f['portion_g']}g)',
               style: const TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
                 fontSize: 12.5,
                 color: Color(0xFFE11D48),
               ),
             ),
-            const SizedBox(height: 4),
+            Text(
+              'Khẩu phần: $portionLabel',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 5),
             Text(
               'Đạm: ${f['protein_g']}g · Béo: ${f['fat_g']}g\nCarb: ${f['carbs_g']}g · GL: ${f['glycemic_load']}',
               style: const TextStyle(
@@ -2242,6 +2387,20 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                 height: 1.35,
               ),
             ),
+            if (ings.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '🍲 Thành phần: ${ings.take(3).join(", ")}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF64748B),
+                  fontStyle: FontStyle.italic,
+                  height: 1.3,
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               '🏃 Đốt: ${f['burn_run_min']}p chạy / ${f['burn_walk_min']}p đi bộ',
@@ -2254,13 +2413,77 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
             const SizedBox(height: 4),
             Text(
               'Điểm sức khỏe: $score/100',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
-                color: primaryDark,
+                color: hasAllergy ? const Color(0xFFDC2626) : primaryDark,
               ),
             ),
+            if (notes.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              ...notes.take(2).map((n) {
+                final isRed = n.startsWith('🚫');
+                final isGreen = n.startsWith('✅');
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isRed
+                        ? const Color(0xFFFEE2E2)
+                        : (isGreen
+                              ? const Color(0xFFD1FAE5)
+                              : const Color(0xFFFEF3C7)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    n,
+                    style: TextStyle(
+                      fontSize: 9.8,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                      color: isRed
+                          ? const Color(0xFF991B1B)
+                          : (isGreen
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF92400E)),
+                    ),
+                  ),
+                );
+              }),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? primary : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? primary : const Color(0xFFCBD5E1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            color: selected ? Colors.white : const Color(0xFF334155),
+          ),
         ),
       ),
     );
@@ -2271,6 +2494,12 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
     final fa = _result?['food_a'] as Map<String, dynamic>?;
     final fb = _result?['food_b'] as Map<String, dynamic>?;
     final winner = '${_result?['winner'] ?? 'A'}';
+    final hp = _result?['active_health_profile'] as Map<String, dynamic>?;
+    final hpAlls = ((hp?['allergies'] as List?) ?? []).map((e) => '$e').toList();
+    final hpConds =
+        ((hp?['conditions'] as List?) ?? []).map((e) => '$e').toList();
+    final criteriaGuide =
+        ((_result?['criteria_guide'] as List?) ?? []).map((e) => '$e').toList();
 
     return AlertDialog(
       title: const Text('So Sánh 2 Món Ăn (Food Vs. Food)'),
@@ -2287,11 +2516,132 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Chọn 2 món ăn bất kỳ để AI đặt lên bàn cân dinh dưỡng & đối chiếu bệnh lý của bạn:',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      'Chọn 2 món ăn và hệ quy chiếu khối lượng để AI đối chiếu mật độ Calo & hồ sơ bệnh lý của bạn:',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 8),
+                    // Thanh hien thi & sua nhanh Ho so Di ung / Benh ly ngay trong hop so sanh
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.health_and_safety_rounded,
+                            size: 16,
+                            color: primaryDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              (hpAlls.isEmpty && hpConds.isEmpty)
+                                  ? 'Hồ sơ y tế: Chưa khai báo dị ứng/bệnh lý'
+                                  : [
+                                      if (hpAlls.isNotEmpty)
+                                        'Dị ứng: ${hpAlls.join(", ")}',
+                                      if (hpConds.isNotEmpty)
+                                        'Bệnh: ${hpConds.join(", ")}',
+                                    ].join(' · '),
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () async {
+                              final saved = await showHealthProfileDialog(
+                                context,
+                                baseUrl: AppConfig.baseUrl,
+                                userKey: AppSession.currentUserKey,
+                              );
+                              if (saved && mounted) {
+                                _runCompare();
+                              }
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                '⚙️ Sửa hồ sơ',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: primaryDark,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Cơ sở định lượng khối lượng so sánh:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildModeChip(
+                          label: '🍽️ 1 Khẩu phần thực tế',
+                          selected:
+                              _compareMode == 'serving' &&
+                              _customPortionG == null,
+                          onTap: () {
+                            setState(() {
+                              _compareMode = 'serving';
+                              _customPortionG = null;
+                            });
+                            _runCompare();
+                          },
+                        ),
+                        _buildModeChip(
+                          label: '⚖️ Chuẩn 100g (Đọ mật độ)',
+                          selected: _compareMode == 'per_100g',
+                          onTap: () {
+                            setState(() {
+                              _compareMode = 'per_100g';
+                              _customPortionG = null;
+                            });
+                            _runCompare();
+                          },
+                        ),
+                        for (final g in [200, 300, 400])
+                          _buildModeChip(
+                            label: 'Cùng ${g}g',
+                            selected:
+                                _compareMode == 'serving' &&
+                                _customPortionG == g,
+                            onTap: () {
+                              setState(() {
+                                _compareMode = 'serving';
+                                _customPortionG = g;
+                              });
+                              _runCompare();
+                            },
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int>(
+                      key: ValueKey('a_${_foodAId}_${_compareMode}_$_customPortionG'),
                       initialValue: _foodAId,
                       isExpanded: true,
                       decoration: const InputDecoration(
@@ -2304,8 +2654,9 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                             (f) => DropdownMenuItem<int>(
                               value: f['class_id'] as int,
                               child: Text(
-                                '${f['name_vi']} (${f['calories']} kcal)',
+                                _dropdownLabel(f),
                                 overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12.5),
                               ),
                             ),
                           )
@@ -2319,6 +2670,7 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int>(
+                      key: ValueKey('b_${_foodBId}_${_compareMode}_$_customPortionG'),
                       initialValue: _foodBId,
                       isExpanded: true,
                       decoration: const InputDecoration(
@@ -2331,8 +2683,9 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                             (f) => DropdownMenuItem<int>(
                               value: f['class_id'] as int,
                               child: Text(
-                                '${f['name_vi']} (${f['calories']} kcal)',
+                                _dropdownLabel(f),
                                 overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12.5),
                               ),
                             ),
                           )
@@ -2344,7 +2697,7 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                         }
                       },
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     if (_comparing)
                       const Padding(
                         padding: EdgeInsets.all(16),
@@ -2388,6 +2741,49 @@ class _FoodComparisonDialogState extends State<FoodComparisonDialog> {
                                 ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '📊 Làm sao biết Calo, Khối lượng & Tiêu chí chấm điểm?',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF065F46),
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            ...(criteriaGuide.isNotEmpty
+                                    ? criteriaGuide
+                                    : [
+                                        '1. Mật độ gốc (kcal/100g): Chuẩn Bảng Thành phần Thực phẩm Việt Nam (Viện Dinh dưỡng Quốc gia).',
+                                        '2. Khối lượng khẩu phần (g): Ước tính theo đơn vị ăn thực tế (1 tô phở/bún/bánh canh ~380g, 1 đĩa cơm ~320g, 1 phần bánh nhỏ ~180g) hoặc quy về cùng 100g.',
+                                        '3. Điểm sức khỏe (/100): Chấm theo Mật độ Calo, Tỷ lệ Đạm/Béo, Tải đường huyết (GL) và Đối chiếu Dị ứng & Bệnh lý cá nhân.',
+                                      ])
+                                .map(
+                                  (g) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 3),
+                                    child: Text(
+                                      '• $g',
+                                      style: const TextStyle(
+                                        fontSize: 10.2,
+                                        color: Color(0xFF1E293B),
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                           ],
                         ),
                       ),

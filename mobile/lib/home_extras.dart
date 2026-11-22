@@ -376,6 +376,7 @@ class SuggestionsCard extends StatefulWidget {
   final String baseUrl;
   final String userKey;
   final double remainingKcal;
+  final String healthSignature;
   final void Function(Map<String, dynamic> food)? onTapFood;
 
   const SuggestionsCard({
@@ -383,6 +384,7 @@ class SuggestionsCard extends StatefulWidget {
     required this.baseUrl,
     required this.userKey,
     required this.remainingKcal,
+    this.healthSignature = '',
     this.onTapFood,
   });
 
@@ -404,7 +406,9 @@ class _SuggestionsCardState extends State<SuggestionsCard> {
   void didUpdateWidget(covariant SuggestionsCard old) {
     super.didUpdateWidget(old);
 
-    if ((old.remainingKcal - widget.remainingKcal).abs() > 20) {
+    if ((old.remainingKcal - widget.remainingKcal).abs() > 20 ||
+        old.healthSignature != widget.healthSignature ||
+        old.userKey != widget.userKey) {
       _load();
     }
   }

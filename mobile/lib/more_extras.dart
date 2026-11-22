@@ -387,8 +387,8 @@ class _ManualAddBodyState extends State<_ManualAddBody> {
 // ============================================================
 
 const List<String> kAllergyOptions = [
-  'đậu nành', 'đậu phộng', 'tôm', 'cua/ghẹ', 'hải sản',
-  'sữa', 'trứng', 'gluten', 'mè',
+  'tôm', 'cua/ghẹ', 'hải sản', 'đậu phộng', 'đậu nành',
+  'sữa', 'trứng', 'gluten', 'mè', 'thịt bò', 'thịt gà',
 ];
 
 const List<String> kConditionOptions = [
@@ -561,6 +561,24 @@ Future<bool> showHealthProfileDialog(
               ),
             ),
             actions: [
+              if (allergies.isNotEmpty || conditions.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    setLocal(() {
+                      allergies.clear();
+                      conditions.clear();
+                      allergyCtrl.clear();
+                      conditionCtrl.clear();
+                    });
+                  },
+                  child: const Text(
+                    'Xóa hết chọn',
+                    style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Hủy'),
@@ -568,6 +586,15 @@ Future<bool> showHealthProfileDialog(
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: _primary),
                 onPressed: () async {
+                  // Tu dong ghi nhan noi dung nguoi dung dang go do trong o nhap
+                  final pendingAllergy = allergyCtrl.text.trim();
+                  if (pendingAllergy.isNotEmpty) {
+                    allergies.add(pendingAllergy);
+                  }
+                  final pendingCond = conditionCtrl.text.trim();
+                  if (pendingCond.isNotEmpty) {
+                    conditions.add(pendingCond);
+                  }
                   try {
                     await http.put(
                       Uri.parse('$baseUrl/api/health/$userKey'),
@@ -581,10 +608,18 @@ Future<bool> showHealthProfileDialog(
                   } catch (_) {}
 
                   if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Đã lưu Hồ sơ sức khỏe (Dị ứng & Bệnh lý)!',
+                        ),
+                        backgroundColor: _primaryDark,
+                      ),
+                    );
                     Navigator.pop(ctx);
                   }
                 },
-                child: const Text('Lưu'),
+                child: const Text('Lưu hồ sơ'),
               ),
             ],
           );
@@ -1133,36 +1168,117 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
     }
   }
 
+  Future<void> _removeSingleItem({String? allergy, String? condition}) async {
+    final nextAllergies = List<String>.from(profile['allergies'] ?? []);
+    final nextConditions = List<String>.from(profile['conditions'] ?? []);
+    if (allergy != null) {
+      nextAllergies.remove(allergy);
+    }
+    if (condition != null) {
+      nextConditions.remove(condition);
+    }
+    setState(() {
+      profile = {
+        'allergies': nextAllergies,
+        'conditions': nextConditions,
+      };
+    });
+    try {
+      await http.put(
+        Uri.parse('${widget.baseUrl}/api/health/${widget.userKey}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'allergies': nextAllergies,
+          'conditions': nextConditions,
+        }),
+      );
+      widget.onChanged?.call();
+    } catch (_) {
+      await _load();
+    }
+  }
+
+  Future<void> _clearAllHealth() async {
+    setState(() {
+      profile = {'allergies': [], 'conditions': []};
+    });
+    try {
+      await http.put(
+        Uri.parse('${widget.baseUrl}/api/health/${widget.userKey}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'allergies': <String>[],
+          'conditions': <String>[],
+        }),
+      );
+      widget.onChanged?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã xóa toàn bộ dị ứng & bệnh lý trong hồ sơ.'),
+            backgroundColor: _primaryDark,
+          ),
+        );
+      }
+    } catch (_) {
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = profile['allergies'] ?? [];
     final c = profile['conditions'] ?? [];
     final empty = a.isEmpty && c.isEmpty;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: _edit,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: _card(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.health_and_safety_rounded, color: _primary),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Hồ sơ sức khỏe (Dị ứng & Bệnh lý)',
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.health_and_safety_rounded, color: _primary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Hồ sơ sức khỏe (Dị ứng & Bệnh lý)',
+                  style: TextStyle(
+                    color: _ink,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              if (!empty)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  onPressed: _clearAllHealth,
+                  child: const Text(
+                    'Xóa hết',
                     style: TextStyle(
-                      color: _ink,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11.5,
                     ),
                   ),
                 ),
-                Text(
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                onPressed: _edit,
+                icon: const Icon(
+                  Icons.edit_rounded,
+                  size: 14,
+                  color: _primaryDark,
+                ),
+                label: Text(
                   empty ? 'Thiết lập' : 'Chỉnh sửa',
                   style: const TextStyle(
                     color: _primaryDark,
@@ -1170,64 +1286,113 @@ class _HealthProfileCardState extends State<HealthProfileCard> {
                     fontSize: 12,
                   ),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (empty)
+            const Text(
+              'Khai báo dị ứng và bệnh lý nền để AI cảnh báo ngay khi bạn quét món ăn, so sánh món hoặc lập thực đơn 7 ngày.',
+              style: TextStyle(color: _muted, fontSize: 12, height: 1.35),
+            )
+          else ...[
+            const Text(
+              'Bấm dấu (×) trên từng thẻ để xóa nhanh hoặc bấm "Chỉnh sửa" để thêm mới:',
+              style: TextStyle(color: _muted, fontSize: 11),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ...a.map(
+                  (e) => InputChip(
+                    avatar: const Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: Color(0xFFD32F2F),
+                    ),
+                    label: Text(
+                      'Dị ứng: $e',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF991B1B),
+                      ),
+                    ),
+                    backgroundColor: const Color(0xFFFEF2F2),
+                    deleteIconColor: const Color(0xFFDC2626),
+                    onDeleted: () => _removeSingleItem(allergy: e),
+                    onPressed: _edit,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                ...c.map(
+                  (e) => InputChip(
+                    avatar: const Icon(
+                      Icons.monitor_heart_rounded,
+                      size: 16,
+                      color: _primaryDark,
+                    ),
+                    label: Text(
+                      'Bệnh lý: $e',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF065F46),
+                      ),
+                    ),
+                    backgroundColor: const Color(0xFFECFDF5),
+                    deleteIconColor: _primaryDark,
+                    onDeleted: () => _removeSingleItem(condition: e),
+                    onPressed: _edit,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            if (empty)
-              const Text(
-                'Khai báo dị ứng và bệnh lý nền để AI cảnh báo ngay khi bạn quét món ăn hoặc lập thực đơn.',
-                style: TextStyle(color: _muted, fontSize: 12),
-              )
-            else
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  ...a.map(
-                    (e) => Chip(
-                      avatar: const Icon(
-                        Icons.warning_amber_rounded,
-                        size: 16,
-                        color: Color(0xFFD32F2F),
-                      ),
-                      label: Text(e),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  ...c.map(
-                    (e) => Chip(
-                      avatar: const Icon(
-                        Icons.monitor_heart_rounded,
-                        size: 16,
-                        color: _primary,
-                      ),
-                      label: Text(e),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _primaryDark,
-                  side: BorderSide(color: _primary.withValues(alpha: 0.45)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: _openMedicalOcr,
-                icon: const Icon(Icons.document_scanner_rounded, size: 18),
-                label: const Text(
-                  'Quét Phiếu Xét Nghiệm Máu (AI OCR)',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
           ],
-        ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFECFDF5),
+                    foregroundColor: _primaryDark,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: _edit,
+                  icon: const Icon(Icons.tune_rounded, size: 17),
+                  label: const Text(
+                    'Chọn Dị ứng & Bệnh',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _primaryDark,
+                    side: BorderSide(color: _primary.withValues(alpha: 0.45)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: _openMedicalOcr,
+                  icon: const Icon(Icons.document_scanner_rounded, size: 17),
+                  label: const Text(
+                    'Quét Xét Nghiệm OCR',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

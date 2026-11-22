@@ -935,6 +935,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     baseUrl: AppConfig.baseUrl,
                     userKey: AppSession.currentUserKey,
                     remainingKcal: remaining,
+                    healthSignature:
+                        '${userAllergies.join(",")}|${userConditions.join(",")}',
                     onTapFood: (f) async {
                       final slot = await pickMealSlot(context);
                       if (slot == null) return;

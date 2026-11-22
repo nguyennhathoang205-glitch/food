@@ -755,7 +755,7 @@ MEDICAL_SAMPLES = {
         "dietary_advice": [
             "Giảm tinh bột tinh chế (cơm trắng, bún, bánh ngọt, nước ngọt), ưu tiên gạo lứt và ăn rau xanh trước bữa ăn.",
             "Hạn chế nội tạng động vật, thịt đỏ, hải sản có vỏ và tuyệt đối kiêng bia rượu để hạ Acid Uric.",
-            "Tránh ăn bưởi (grapefruit/pomelo) khi đang dùng thuốc hạ mỡ máu nhóm Statin (Atorvastatin)."
+            "Ưu tiên dầu thực vật, cá giàu Omega-3 và duy trì vận động 30 phút/ngày để cải thiện mỡ máu."
         ],
         "drug_food_notes": [
             "Metformin 500mg: Uống ngay sau bữa ăn để giảm kích ứng dạ dày; kiêng rượu bia (nguy cơ nhiễm toan lactic).",
