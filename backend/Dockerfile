@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=7860
+    PORT=7860 \
+    HOME=/app \
+    HF_HOME=/app/.cache/huggingface \
+    YOLO_CONFIG_DIR=/tmp/Ultralytics
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 \
@@ -17,6 +20,8 @@ COPY requirements-deploy.txt .
 RUN pip install -r requirements-deploy.txt
 
 COPY . .
+
+RUN mkdir -p /app/.cache/huggingface /app/feedback_data && chmod -R 777 /app
 
 EXPOSE 7860
 CMD ["gunicorn", "-b", "0.0.0.0:7860", "-w", "1", "--threads", "4", "--timeout", "180", "app:app"]
