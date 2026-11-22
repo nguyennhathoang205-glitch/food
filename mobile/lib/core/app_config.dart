@@ -15,7 +15,11 @@ class AppConfig {
   static const String _hfSpaceUrl = 'https://quangdadada-foodscan-api.hf.space';
 
   static String get defaultBaseUrl {
-    if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
+    if (_envBaseUrl.isNotEmpty &&
+        !_envBaseUrl.contains('TEN-CUA-BAN') &&
+        !_envBaseUrl.contains('doi-dia-chi')) {
+      return _envBaseUrl;
+    }
     return _hfSpaceUrl;
   }
 
