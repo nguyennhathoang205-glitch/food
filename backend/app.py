@@ -406,8 +406,8 @@ _DEFAULT_DISH_INGREDIENTS = {
     "bún bò": [
         "Bún sợi to",
         "Thịt bắp bò & giò heo",
-        "Chả cua / chả bò",
-        "Nước dùng sả ruốc",
+        "Chả bò Huế",
+        "Nước dùng xương hầm sả",
         "Rau muống bào & bắp chuối",
     ],
     "bún chả": [
@@ -1973,10 +1973,8 @@ def detect():
             }
         })
 
-    # Lay ket qua Gemini Vision da chay song song voi YOLO. Neu YOLO da nhan
-    # dien duoc mon an (detections khong rong), gioi han cho Gemini toi da 4.5s
-    # de nguoi dung khong bao gio phai doi lau.
-    gemini_timeout = 7.5 if detections else 10.0
+    # Lay ket qua Gemini Vision da chay song song voi YOLO.
+    gemini_timeout = 12.0
     try:
         gemini_analysis = gemini_future.result(timeout=gemini_timeout)
     except (FuturesTimeoutError, Exception):
@@ -2008,6 +2006,30 @@ def detect():
 
         total_nutrition = gemini_total if has_real_total else yolo_total
         nutrition_source = "gemini" if has_real_total else "yolo"
+
+        # Dong bo danh sach detections voi ket qua chinh xac cua Gemini Vision:
+        if main_dish and detections:
+            md_low = main_dish.lower()
+            is_tray = any(k in md_low for k in ("mâm cơm", "mam com", "nhiều món", "combo"))
+            if not is_tray:
+                best_det = max(detections, key=lambda x: x.get("confidence", 0))
+                best_det["name_vi"] = main_dish
+                best_det["estimated_portion_g"] = gemini_analysis.get("estimated_weight_g") or best_det.get("estimated_portion_g") or 350
+                best_det["nutrition"] = dict(total_nutrition)
+                detections = [best_det]
+            elif ingredients:
+                n_det = len(detections)
+                w_total = gemini_analysis.get("estimated_weight_g") or 600
+                for idx, det in enumerate(detections):
+                    if idx < len(ingredients):
+                        det["name_vi"] = ingredients[idx][:1].upper() + ingredients[idx][1:]
+                    det["estimated_portion_g"] = round(w_total / max(n_det, 1))
+                    det["nutrition"] = {
+                        "calories": round(total_nutrition.get("calories", 0) / max(n_det, 1), 1),
+                        "protein_g": round(total_nutrition.get("protein_g", 0) / max(n_det, 1), 1),
+                        "fat_g": round(total_nutrition.get("fat_g", 0) / max(n_det, 1), 1),
+                        "carbs_g": round(total_nutrition.get("carbs_g", 0) / max(n_det, 1), 1),
+                    }
     else:
         unique_yolo_names = []
         for d in detections:
@@ -2062,10 +2084,12 @@ def detect():
     health_user_key = _current_user_key()
     user_health_profile = health_rules.load_profile(health_user_key)
 
-    warning_names = [d["name_vi"] for d in detections]
-
-    if main_dish:
-        warning_names.append(main_dish)
+    if gemini_analysis and main_dish:
+        warning_names = [main_dish]
+    else:
+        warning_names = [d["name_vi"] for d in detections]
+        if main_dish:
+            warning_names.append(main_dish)
 
     warnings = health_rules.check_warnings(
         user_health_profile,
