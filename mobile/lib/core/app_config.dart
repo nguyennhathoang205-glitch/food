@@ -14,15 +14,11 @@ class AppConfig {
   // - Production: Can be replaced with your deployed server (e.g. Render / Railway)
   // Dia chi may chu luc build: flutter build ios --dart-define=API_BASE_URL=https://ten-ban.example.com
   static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+  static const String _hfSpaceUrl = 'https://quangdadada-foodscan-api.hf.space';
 
   static String get defaultBaseUrl {
     if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
-    if (kIsWeb) return 'http://localhost:5000';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // In physical device debugging or emulator
-      return 'http://10.0.2.2:5000';
-    }
-    return 'http://localhost:5000';
+    return _hfSpaceUrl;
   }
 
   static String baseUrl = defaultBaseUrl;
