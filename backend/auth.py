@@ -190,3 +190,35 @@ def login(email, password):
         return None, "Sai email hoặc mật khẩu."
 
     return {"id": user["id"], "email": email, "name": user["name"]}, None
+
+
+def google_login(email, name):
+    """Dang nhap bang Google (email da duoc Google xac minh).
+    Chua co tai khoan thi tu tao (mat khau ngau nhien, khong dung duoc de dang nhap
+    thuong); da co thi dung lai tai khoan do (cung email = cung nguoi)."""
+    email = (email or "").strip().lower()
+
+    if not _EMAIL_RE.match(email):
+        return None, "Email Google không hợp lệ."
+
+    name = (name or "").strip() or email.split("@")[0]
+
+    with _lock:
+        users = _read()
+        user = users.get(email) or _sb_find_user(email)
+
+        if user is None:
+            salt = secrets.token_hex(16)
+            user = {
+                "id": "u" + uuid.uuid4().hex[:12],
+                "name": name,
+                "salt": salt,
+                "hash": _hash(secrets.token_urlsafe(32), salt),
+                "created": int(time.time()),
+            }
+            _sb_save_user(email, user)
+
+        users[email] = user
+        _write(users)
+
+    return {"id": user["id"], "email": email, "name": user["name"]}, None

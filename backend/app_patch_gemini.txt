@@ -1,0 +1,84 @@
+DAN VAO app.py (khong thay ca file, vi app.py cua ban co the khac ban cua minh):
+
+1) Duoi dong "import chat_agent_api" them 1 dong:
+       import gemini_fast
+
+2) Trong app.py tim  def _gemini_call(contents, config=None):
+   Xoa TU DONG DO cho den HET ham  def _ask_gemini_chat(...)  (ngay truoc
+   def _daily_goal_of), roi dan doan duoi day vao cho do.
+----------------------------------------------------------------------
+
+def _gemini_call_raw(contents, config=None):
+    """Goi Gemini 1 lan voi `contents` bat ky. Tra ve (text | None, config_bi_tu_choi).
+    Xoay key + thu lai khi qua tai (dung chung cho mam com gia dinh va chat agent)."""
+    if not GEMINI_API_KEYS:
+        return None, False
+
+    keys_tried = 0
+
+    while keys_tried < len(GEMINI_API_KEYS):
+        client = get_gemini_client()
+
+        if client is None:
+            break
+
+        retries_left = 3
+
+        while retries_left > 0:
+            try:
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=contents,
+                    config=config or {},
+                )
+                return response.text, False
+            except Exception as e:
+                if gemini_fast.is_config_error(e):
+                    return None, True      # tham so thinking khong hop le, khong phai qua tai
+
+                retries_left -= 1
+
+                if _is_temporary_error(str(e)) and retries_left > 0:
+                    time.sleep(1.5)
+                    continue
+
+                print(f"[gemini] loi: {e}")
+                break
+
+        keys_tried += 1
+
+        if not switch_gemini_key():
+            break
+
+    return None, False
+
+
+_fast_state = {}
+
+
+def _gemini_call(contents, config=None, fast=False):
+    """text hoac None. fast=True: tat/giam 'thinking' de tra loi nhanh (dung cho chat)."""
+    if fast:
+        return gemini_fast.call_fast(
+            _gemini_call_raw, GEMINI_MODEL_NAME, contents, config, _fast_state
+        )
+
+    return _gemini_call_raw(contents, config)[0]
+
+
+def _ask_gemini_with_image(image_bytes, prompt):
+    """Hoi Gemini voi 1 anh JPEG, tra ve text (JSON) hoac None."""
+    return _gemini_call(
+        [types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
+        {"response_mime_type": "application/json"},
+    )
+
+
+def _ask_gemini_chat(contents, system_text):
+    """Chat nhieu luot voi system prompt, tra ve JSON text hoac None (che do nhanh)."""
+    return _gemini_call(
+        contents,
+        {"system_instruction": system_text,
+         "response_mime_type": "application/json"},
+        fast=True,
+    )

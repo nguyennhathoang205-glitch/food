@@ -11,5 +11,8 @@ numpy
 requests
 PyJWT
 PyYAML
+<<<<<<< HEAD
 sentence-transformers
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 

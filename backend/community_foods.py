@@ -14,9 +14,13 @@ File nay chi chua logic, khong phu thuoc Flask -> de test va tai su dung
 trong eval_fewshot.py. API nam o community_api.py.
 """
 
+<<<<<<< HEAD
 import colorsys
 import io
 import math
+=======
+import io
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 import os
 import threading
 import unicodedata
@@ -42,7 +46,10 @@ MAX_NAME_LENGTH = 60
 
 _model = None
 _model_failed = False
+<<<<<<< HEAD
 _model_loading = False
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 _model_lock = threading.Lock()
 
 
@@ -50,6 +57,7 @@ _model_lock = threading.Lock()
 # Vector hoa anh
 # ------------------------------------------------------------------
 
+<<<<<<< HEAD
 def is_model_loaded():
     """Luon san sang vi da co bo trich xuat vector 512 chieu fallback tuc thi."""
     return True
@@ -128,6 +136,8 @@ def _fallback_embed_single(image: Image.Image) -> list[float]:
     return [round(x / norm, 6) for x in vec]
 
 
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 def _load_model():
     """Nap CLIP 1 lan duy nhat (lan dau se tu tai ~600MB tu Hugging Face)."""
     global _model, _model_failed
@@ -166,12 +176,16 @@ def embed_images(images):
     """Danh sach anh PIL -> danh sach vector (list[float]) da chuan hoa do dai 1.
 
     Vector da chuan hoa nen cosine similarity = tich vo huong.
+<<<<<<< HEAD
     Neu may chua cai sentence_transformers (CLIP), tu dong dung bo trich xuat
     vector 512 chieu _fallback_embed_single() de tinh nang Day AI luon hoat dong.
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     """
     if not images:
         return []
 
+<<<<<<< HEAD
     try:
         vectors = _load_model().encode(
             list(images),
@@ -182,6 +196,16 @@ def embed_images(images):
         return [[float(x) for x in vec] for vec in vectors]
     except Exception:
         return [_fallback_embed_single(img) for img in images]
+=======
+    vectors = _load_model().encode(
+        list(images),
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    )
+
+    return [[float(x) for x in vec] for vec in vectors]
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
 
 # ------------------------------------------------------------------
@@ -280,10 +304,13 @@ def teach(supabase, user_key, name_vi, images, nutrition=None, embedder=embed_im
     if not images:
         return None, "Cần ít nhất 1 ảnh hợp lệ."
 
+<<<<<<< HEAD
     # Tinh vector TRUOC khi ghi DB de neu embedder loi thi khong tao dong
     # mon an rong (image_count = 0) trong community_foods.
     vectors = embedder(images)
 
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     existing = (
         supabase.table("community_foods")
         .select("*")
@@ -314,6 +341,11 @@ def teach(supabase, user_key, name_vi, images, nutrition=None, embedder=embed_im
         food = created.data[0]
         is_new = True
 
+<<<<<<< HEAD
+=======
+    vectors = embedder(images)
+
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     supabase.table("community_food_images").insert([
         {"food_id": food["id"], "user_key": user_key, "embedding": vec}
         for vec in vectors

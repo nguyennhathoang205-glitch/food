@@ -6,7 +6,10 @@ import json
 import time
 import uuid
 import base64
+<<<<<<< HEAD
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+=======
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 from datetime import datetime, timedelta, timezone
 
 from flask import Flask, jsonify, request
@@ -27,7 +30,12 @@ import community_api
 import recipes_api
 import family_api
 import chat_agent_api
+<<<<<<< HEAD
 import volume_3d
+=======
+import gemini_fast
+import google_auth_api
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
 
 # ============================================================
@@ -2062,6 +2070,7 @@ def detect():
         total_nutrition = yolo_total
         nutrition_source = "yolo"
 
+<<<<<<< HEAD
     if not ingredients:
         fallback_dish_name = main_dish or (detections[0]["name_vi"] if detections else "")
         ingredients = infer_default_ingredients(fallback_dish_name, detections)
@@ -2090,6 +2099,14 @@ def detect():
                     "carbs_g": round(number_or_zero(community_match.get("carbs_g")) * factor, 1),
                 }
                 nutrition_source = "community_clip"
+=======
+    # Mon do CONG DONG day (khong nam trong 68 lop YOLO). Chi la truong THEM
+    # vao ket qua; neu ca Gemini lan YOLO deu khong ra ten mon thi dung ten nay.
+    community_match = community_api.match_for_detect(image)
+
+    if community_match and not main_dish and not detections:
+        main_dish = community_match["name_vi"]
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
     estimated_weight_g = (
         gemini_analysis.get("estimated_weight_g") if gemini_analysis else 0
@@ -3065,6 +3082,7 @@ def foods_compare_endpoint():
     """So sanh truc dien 2 mon an theo dinh duong & benh ly ca nhan."""
     payload = request.get_json(silent=True) or {}
     user_key = _current_user_key()
+<<<<<<< HEAD
     raw_a = payload.get("food_a_id")
     raw_b = payload.get("food_b_id")
     food_a_id = int(raw_a) if raw_a is not None else 0
@@ -3076,6 +3094,10 @@ def foods_compare_endpoint():
         if raw_portion is not None and number_or_zero(raw_portion) >= 50
         else None
     )
+=======
+    food_a_id = int(payload.get("food_a_id") or 0)
+    food_b_id = int(payload.get("food_b_id") or 1)
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
     hp = health_rules.load_profile(user_key)
     conds = hp.get("conditions", []) if isinstance(hp, dict) else []
@@ -3153,11 +3175,17 @@ def analyze_menu_endpoint():
     daily_goal = number_or_zero(payload.get("daily_goal") or request.form.get("daily_goal")) or 2000.0
 
     # Neu nguoi dung chup anh to Menu va co Gemini Vision -> trich xuat ten mon tren menu
+<<<<<<< HEAD
     if "image" in request.files and GEMINI_API_KEYS:
+=======
+    gclient = get_gemini_client()
+    if "image" in request.files and gclient is not None:
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         try:
             f = request.files["image"]
             img_bytes = jpeg_for_gemini(f.read())
             if img_bytes:
+<<<<<<< HEAD
                 extracted = _gemini_call(
                     [
                         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
@@ -3166,6 +3194,18 @@ def analyze_menu_endpoint():
                 )
                 if extracted and extracted.strip():
                     menu_text = extracted.strip()
+=======
+                resp = gclient.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=[
+                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                        "Đọc ảnh thực đơn (menu) này và liệt kê tối đa 8 tên món ăn bằng tiếng Việt, mỗi món 1 dòng, không đánh số.",
+                    ],
+                )
+                extracted = (resp.text or "").strip()
+                if extracted:
+                    menu_text = extracted
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         except Exception:
             pass
 
@@ -3189,7 +3229,11 @@ def fridge_suggest_endpoint():
     payload = request.get_json(silent=True) or {}
     user_key = _current_user_key()
     daily_goal = number_or_zero(payload.get("daily_goal") or request.form.get("daily_goal")) or 2000.0
+<<<<<<< HEAD
     raw_ings = payload.get("ingredients") or request.form.get("ingredients")
+=======
+    raw_ings = payload.get("ingredients")
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     ingredients: list[str] = []
     if isinstance(raw_ings, list):
         ingredients = [str(x).strip() for x in raw_ings if str(x).strip()]
@@ -3197,11 +3241,17 @@ def fridge_suggest_endpoint():
         ingredients = [x.strip() for x in raw_ings.split(",") if x.strip()]
 
     # Neu nguoi dung chup anh tu lanh va co Gemini Vision -> nhan dien nguyen lieu
+<<<<<<< HEAD
     if "image" in request.files and GEMINI_API_KEYS:
+=======
+    gclient = get_gemini_client()
+    if "image" in request.files and gclient is not None:
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         try:
             f = request.files["image"]
             img_bytes = jpeg_for_gemini(f.read())
             if img_bytes:
+<<<<<<< HEAD
                 extracted = _gemini_call(
                     [
                         types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
@@ -3210,6 +3260,18 @@ def fridge_suggest_endpoint():
                 )
                 if extracted and extracted.strip():
                     ingredients.extend([x.strip() for x in extracted.strip().split(",") if x.strip()])
+=======
+                resp = gclient.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=[
+                        genai.types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                        "Liệt kê các nguyên liệu thực phẩm nhìn thấy trong ảnh này bằng tiếng Việt, cách nhau bởi dấu phẩy (ngắn gọn).",
+                    ],
+                )
+                extracted = (resp.text or "").strip()
+                if extracted:
+                    ingredients.extend([x.strip() for x in extracted.split(",") if x.strip()])
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         except Exception:
             pass
 
@@ -3240,6 +3302,7 @@ recipes_api.init(app, supabase, _bearer_uid)   # cong thuc cong dong
 # MAM COM GIA DINH (tach mon bang Gemini, chia phan) - xem family_api.py
 # ============================================================
 
+<<<<<<< HEAD
 def _gemini_call(contents, config=None):
     """Goi Gemini 1 lan voi `contents` bat ky, tra ve text hoac None.
     Xoay key + thu lai khi qua tai (dung chung cho mam com gia dinh va chat agent)."""
@@ -3254,11 +3317,23 @@ def _gemini_call(contents, config=None):
             models_to_try.append(_m)
 
     while keys_tried < max_keys:
+=======
+def _gemini_call_raw(contents, config=None):
+    """Goi Gemini 1 lan voi `contents` bat ky. Tra ve (text | None, config_bi_tu_choi).
+    Xoay key + thu lai khi qua tai (dung chung cho mam com gia dinh va chat agent)."""
+    if not GEMINI_API_KEYS:
+        return None, False
+
+    keys_tried = 0
+
+    while keys_tried < len(GEMINI_API_KEYS):
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         client = get_gemini_client()
 
         if client is None:
             break
 
+<<<<<<< HEAD
         for candidate_model in models_to_try:
             try:
                 response = client.models.generate_content(
@@ -3271,6 +3346,28 @@ def _gemini_call(contents, config=None):
                 err_str = str(e)
                 if "NOT_FOUND" in err_str or "404" in err_str or _is_temporary_error(err_str):
                     continue
+=======
+        retries_left = 3
+
+        while retries_left > 0:
+            try:
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL_NAME,
+                    contents=contents,
+                    config=config or {},
+                )
+                return response.text, False
+            except Exception as e:
+                if gemini_fast.is_config_error(e):
+                    return None, True      # tham so thinking khong hop le, khong phai qua tai
+
+                retries_left -= 1
+
+                if _is_temporary_error(str(e)) and retries_left > 0:
+                    time.sleep(1.5)
+                    continue
+
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
                 print(f"[gemini] loi: {e}")
                 break
 
@@ -3279,7 +3376,24 @@ def _gemini_call(contents, config=None):
         if not switch_gemini_key():
             break
 
+<<<<<<< HEAD
     return None
+=======
+    return None, False
+
+
+_fast_state = {}
+
+
+def _gemini_call(contents, config=None, fast=False):
+    """text hoac None. fast=True: tat/giam 'thinking' de tra loi nhanh (dung cho chat)."""
+    if fast:
+        return gemini_fast.call_fast(
+            _gemini_call_raw, GEMINI_MODEL_NAME, contents, config, _fast_state
+        )
+
+    return _gemini_call_raw(contents, config)[0]
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
 
 def _ask_gemini_with_image(image_bytes, prompt):
@@ -3291,11 +3405,19 @@ def _ask_gemini_with_image(image_bytes, prompt):
 
 
 def _ask_gemini_chat(contents, system_text):
+<<<<<<< HEAD
     """Chat nhieu luot voi system prompt, tra ve JSON text hoac None."""
+=======
+    """Chat nhieu luot voi system prompt, tra ve JSON text hoac None (che do nhanh)."""
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     return _gemini_call(
         contents,
         {"system_instruction": system_text,
          "response_mime_type": "application/json"},
+<<<<<<< HEAD
+=======
+        fast=True,
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     )
 
 
@@ -3320,6 +3442,10 @@ def _family_warnings(user_key, dish_names, nutrition):
 family_api.init(app, supabase, _bearer_uid, _ask_gemini_with_image, _family_warnings)
 chat_agent_api.init(app, supabase, _bearer_uid, _ask_gemini_chat,
                      _chat_context_parts, _daily_goal_of)
+<<<<<<< HEAD
+=======
+google_auth_api.init(app, auth_store)   # dang nhap bang Google
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
 
 # ============================================================

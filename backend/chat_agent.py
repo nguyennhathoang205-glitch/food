@@ -24,6 +24,12 @@ VN_TZ = timezone(timedelta(hours=7))
 WEEKDAYS = ["thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy", "Chủ nhật"]
 
 MAX_MEALS = 8
+<<<<<<< HEAD
+=======
+
+# Khong select("*"): bang meal_logs co the chua anh thumbnail base64 (~10KB/dong).
+MEAL_COLUMNS = "id,food_name,meal_type,calories,protein_g,fat_g,carbs_g,created_at"
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 MAX_HISTORY = 10
 
 AGENT_PROMPT = """Ban la tro ly dinh duong than thien trong app "FoodScan AI".
@@ -108,21 +114,48 @@ def _num(value):
         return 0.0
 
 
+<<<<<<< HEAD
 def build_context(supabase, user_key, now=None, daily_goal=2000):
     """Doan van ngu canh: hom nay + 7 ngay qua. Loi doc DB thi tra ve chuoi rong
     (chat van chay, chi thieu ngu canh)."""
+=======
+def fetch_meals(supabase, user_key, now=None):
+    """Nhat ky 8 ngay gan nhat. Loi doc DB -> None. API co the goi ham nay song song
+    voi cac truy van khac roi truyen ket qua vao build_context(meals=...)."""
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     now = now or datetime.now(VN_TZ)
     cutoff = (now - timedelta(days=8)).astimezone(timezone.utc).isoformat()
 
     try:
+<<<<<<< HEAD
         meals = (
             supabase.table("meal_logs").select("*")
+=======
+        return (
+            supabase.table("meal_logs").select(MEAL_COLUMNS)
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
             .eq("user_key", user_key).gte("created_at", cutoff)
             .order("created_at", desc=True).limit(500).execute()
         ).data or []
     except Exception as e:
         print(f"[chat_agent] khong doc duoc nhat ky: {e}")
+<<<<<<< HEAD
         return ""
+=======
+        return None
+
+
+def build_context(supabase, user_key, now=None, daily_goal=2000, meals=None):
+    """Doan van ngu canh: hom nay + 7 ngay qua. Loi doc DB thi tra ve chuoi rong
+    (chat van chay, chi thieu ngu canh). `meals`: nhat ky da doc san (bo qua truy van)."""
+    now = now or datetime.now(VN_TZ)
+
+    if meals is None:
+        meals = fetch_meals(supabase, user_key, now)
+
+        if meals is None:
+            return ""
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
     today = now.strftime("%Y-%m-%d")
     by_day = {}
@@ -264,7 +297,11 @@ def _history_contents(history, message):
 # ------------------------------------------------------------------
 
 def handle_message(supabase, user_key, message, history, ask, extra_context="",
+<<<<<<< HEAD
                    daily_goal=2000, now=None):
+=======
+                   daily_goal=2000, now=None, meals=None):
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     """ask(contents, system_text) -> text|None (Gemini, JSON mode).
 
     Tra ve (ket_qua, loi). ket_qua = {reply, intent, pending}.
@@ -276,7 +313,11 @@ def handle_message(supabase, user_key, message, history, ask, extra_context="",
         return None, "Thiếu tin nhắn."
 
     now = now or datetime.now(VN_TZ)
+<<<<<<< HEAD
     context = build_context(supabase, user_key, now=now, daily_goal=daily_goal)
+=======
+    context = build_context(supabase, user_key, now=now, daily_goal=daily_goal, meals=meals)
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     context_block = "\nNGU CANH:\n" + "\n".join(
         part for part in (extra_context, context) if part
     ) + "\n"
@@ -348,7 +389,11 @@ def handle_message(supabase, user_key, message, history, ask, extra_context="",
 
 def _latest_meal(supabase, user_key):
     rows = (
+<<<<<<< HEAD
         supabase.table("meal_logs").select("*").eq("user_key", user_key)
+=======
+        supabase.table("meal_logs").select(MEAL_COLUMNS).eq("user_key", user_key)
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         .order("created_at", desc=True).limit(1).execute()
     ).data or []
     return rows[0] if rows else None
@@ -393,7 +438,11 @@ def confirm_delete(supabase, user_key, meal_id):
         return None, "Món cần xóa không hợp lệ.", 400
 
     found = (
+<<<<<<< HEAD
         supabase.table("meal_logs").select("*")
+=======
+        supabase.table("meal_logs").select(MEAL_COLUMNS)
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         .eq("id", meal_id).eq("user_key", user_key).limit(1).execute()
     ).data
 

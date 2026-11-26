@@ -124,6 +124,7 @@ def foods():
 
 def match_for_detect(image):
     """Dung trong /detect: tra ve mon cong dong neu nhan ra CHAC CHAN, nguoc
+<<<<<<< HEAD
     lai None. Khong bao gio lam hong hay lam cham /detect: neu CLIP chua nap
     xong trong RAM thi kich hoat warmup ngam va tra None ngay."""
     if not ENABLED or _supabase is None:
@@ -133,6 +134,12 @@ def match_for_detect(image):
         community_foods.warmup_async()
         return None
 
+=======
+    lai None. Khong bao gio lam hong /detect (loi gi cung tra None)."""
+    if not ENABLED or _supabase is None:
+        return None
+
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
     try:
         return community_foods.recognize(_supabase, image)["best"]
     except Exception as e:

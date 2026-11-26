@@ -294,4 +294,48 @@ def test_api_dau_vao_sai_va_chua_dang_nhap():
     assert client.post("/api/chat/agent/confirm", json={"type": "log_meal", "items": []}).status_code == 400
 
     anonymous, _ = make_client(uid=None)
+<<<<<<< HEAD
     assert anonymous.post("/api/chat/agent", json={"message": "hi"}).status_code == 401
+=======
+    assert anonymous.post("/api/chat/agent", json={"message": "hi"}).status_code == 401
+
+
+# ---------------- Toi uu: doc song song / khong truy van thua ----------------
+
+def test_nhat_ky_doc_san_thi_khong_truy_van_lai():
+    class Counting(FakeSupabase):
+        queries = 0
+
+        def table(self, name):
+            Counting.queries += 1
+            return super().table(name)
+
+    sb = Counting()
+    sb.add_meal("u1", "Cơm tấm", 620, NOW.replace(hour=12))
+
+    meals = ca.fetch_meals(sb, "u1", now=NOW)
+    assert [m["food_name"] for m in meals] == ["Cơm tấm"] and Counting.queries == 1
+
+    text = ca.build_context(sb, "u1", now=NOW, daily_goal=2000, meals=meals)
+    assert "620 kcal / muc tieu 2000" in text and Counting.queries == 1   # khong doc lai
+
+
+def test_fetch_meals_loi_tra_none():
+    class Broken:
+        def table(self, _):
+            raise RuntimeError("mat ket noi")
+    assert ca.fetch_meals(Broken(), "u1", now=NOW) is None
+
+
+def test_api_mot_phan_ngu_canh_loi_van_tra_loi_duoc():
+    def boom(*_):
+        raise RuntimeError("loi ho so")
+
+    app = Flask(__name__)
+    sb = FakeSupabase()
+    ask = reply_with(intent="chat", reply="Chào bạn!", meals=[])
+    chat_agent_api.init(app, sb, lambda: "u1", ask, boom, boom)
+    res = app.test_client().post("/api/chat/agent", json={"message": "hi", "history": []})
+    assert res.status_code == 200 and res.json["reply"] == "Chào bạn!"
+    assert "CHUA ghi bua nao" in ask.last["system"]       # nhat ky van doc duoc
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)

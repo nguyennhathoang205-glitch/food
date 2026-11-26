@@ -15,6 +15,11 @@ API (can dang nhap):
         -> thuc su ghi / xoa sau khi nguoi dung bam xac nhan.
 """
 
+<<<<<<< HEAD
+=======
+from concurrent.futures import ThreadPoolExecutor
+
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 from flask import Blueprint, jsonify, request
 
 import chat_agent
@@ -54,11 +59,46 @@ def _require_login():
     return None
 
 
+<<<<<<< HEAD
+=======
+def _load_context(uid, scan_context):
+    """3 truy van DB doc lap (ho so + y te, muc tieu, nhat ky) chay SONG SONG thay vi
+    noi duoi nhau -> bot ~2/3 thoi gian cho truoc khi hoi Gemini. Loi tung phan
+    chi lam thieu ngu canh, khong lam hong chat."""
+
+    def get_extra():
+        if _context_parts is None:
+            return ""
+        return "\n".join(_context_parts(uid, scan_context) or [])
+
+    def get_goal():
+        return (_goal_of(uid) if _goal_of is not None else 0) or 2000
+
+    def get_meals():
+        return chat_agent.fetch_meals(_supabase, uid)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(fn) for fn in (get_extra, get_goal, get_meals)]
+        defaults = ("", 2000, None)
+        values = []
+
+        for future, default in zip(futures, defaults):
+            try:
+                values.append(future.result(timeout=15))
+            except Exception as e:
+                print(f"[chat_agent] bo qua ngu canh phu: {e}")
+                values.append(default)
+
+    return tuple(values)
+
+
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 @bp.route("/agent", methods=["POST"])
 def agent():
     data = request.get_json(silent=True) or {}
     uid = _get_uid()
 
+<<<<<<< HEAD
     extra = ""
     goal = 2000
 
@@ -69,11 +109,18 @@ def agent():
             goal = _goal_of(uid) or 2000
     except Exception as e:
         print(f"[chat_agent] bo qua ngu canh phu: {e}")
+=======
+    extra, goal, meals = _load_context(uid, data.get("scan_context"))
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
 
     try:
         result, error = chat_agent.handle_message(
             _supabase, uid, data.get("message"), data.get("history"), _ask,
+<<<<<<< HEAD
             extra_context=extra, daily_goal=goal,
+=======
+            extra_context=extra, daily_goal=goal, meals=meals,
+>>>>>>> a9402009 (chat nhanh + dang nhap Google)
         )
     except Exception as e:
         print(f"[chat_agent] agent loi: {e}")
